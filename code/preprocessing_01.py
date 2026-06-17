@@ -75,7 +75,7 @@ def load_data(
     # Partition at participan level (Training = 70; Validation = 15; Testing = 15)
     participants = df["participant_id"].drop_duplicates()
     strat_col = BINARY[0] if BINARY else None # DMT2
-    # Group by Participant and get the maximum value of the stratification variable (DMT2)
+    # Group by Participant, taking who ever had DMT2 (1) or not (0) and reindexing to match the order of participants
     # It maintains similar proportions of cases with and without DMT2 in train, validation, and test
     participant_strat = (df.groupby("participant_id")[strat_col].max().reindex(participants)
                          if strat_col is not None else None)
@@ -83,8 +83,8 @@ def load_data(
     train_p, temp_p = train_test_split(
         participants, 
         test_size = 0.30, # 70% in training; 30% in validation and testing
-        random_state = random_state,
-        stratify = participant_strat
+        random_state = random_state, # random seed for reproducibility
+        stratify = participant_strat # divides the participants maintaining the proportion of DMT2 cases
     )
     val_p, test_p = train_test_split(
         temp_p,
