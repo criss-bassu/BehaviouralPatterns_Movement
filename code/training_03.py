@@ -52,7 +52,7 @@ def train_one_epoch(model, loader, optimiser, device):
     for batch in loader:
         x = batch["x"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
         cov = batch["cov"].to(device) # Vector of clinical covariates (sample, covariates)
-        y = batch["y"].to(device) # Real clinical targets (sample, targets)
+        y = batch["target"].to(device) # Real clinical targets (sample, targets)
         mask = batch["mask"].to(device) # Mask indicating which clinical targets exist
 
         # Restarts the gradients (saved by default)
@@ -86,7 +86,7 @@ def evaluate_loss(model, loader, device):
     for batch in loader:
         x = batch["x"].to(device)
         cov = batch["cov"].to(device)
-        y = batch["y"].to(device)
+        y = batch["target"].to(device)
         mask = batch["mask"].to(device)
 
         outputs = model(x, cov)
