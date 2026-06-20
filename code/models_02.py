@@ -32,6 +32,7 @@ class CNNEncoder(nn.Module):
         self.conv = nn.Sequential(
             # in_channels = number of input features = d descriptors
             # kernel_size = looks at 5 consecutive hours
+            # out_channels = number of patterns the CNN can learn
             nn.Conv1d(in_channels = d, out_channels = channels, kernel_size = 5, padding = 2),
             nn.ReLU(),
             nn.BatchNorm1d(channels), # Normalization layer to stabilize training

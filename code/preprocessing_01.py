@@ -121,7 +121,7 @@ def load_data(
                  if c not in ["idweek", "participant_id", "Tiempo", "split"] + TARGET_COLS]
     # Get the clinical covariates of the training samples
     cov_train = df.loc[train_idx, cov_cols]
-    # Compute the mean and standard deviation of each clinical covariate in the training set
+    # Compute the mean of each clinical covariate in the training set
     cov_mean  = cov_train.mean()
     # Compute the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
     cov_std   = cov_train.std().replace(0, 1)
