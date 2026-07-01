@@ -26,19 +26,20 @@ class MLPEncoder(nn.Module):
 
 
 class CNNEncoder(nn.Module):
-    def __init__(self, d, channels = 64, rep_dim = 128, dropout = 0.3):
+    def __init__(self, d, channels = 64, rep_dim = 128, dropout = 0.3, kernel_size = 5):
         super().__init__()
+        padding = kernel_size // 2
         # 1D-CNN definition
         self.conv = nn.Sequential(
             # in_channels = number of input features = d descriptors
             # kernel_size = looks at 5 consecutive hours
             # out_channels = number of patterns the CNN can learn
-            nn.Conv1d(in_channels = d, out_channels = channels, kernel_size = 5, padding = 2),
+            nn.Conv1d(in_channels = d, out_channels = channels, kernel_size = kernel_size, padding = padding),
             nn.ReLU(),
             nn.BatchNorm1d(channels), # Normalization layer to stabilize training
             nn.Dropout(dropout),
             # Previous convolutional features as input.
-            nn.Conv1d(in_channels = channels, out_channels = channels, kernel_size = 5, padding = 2),
+            nn.Conv1d(in_channels = channels, out_channels = channels, kernel_size = kernel_size, padding = padding),
             nn.ReLU(),
             nn.BatchNorm1d(channels),
             # Converts a time sequence into one summary vector per sample (global average pooling)
@@ -112,10 +113,16 @@ class MultiTaskHead(nn.Module):
         return {task: head(z).squeeze(1) for task, head in self.heads.items()} # Each task gets one prediction per sample
 
 class WeeklyOutcomeModel(nn.Module):
-    def __init__(self, encoder, tasks, rep_dim = 128, cov_dim = 3):
+    def __init__(self, encoder, tasks, rep_dim = 128, cov_dim = 3, head_hidden = 128, head_dropout = 0.3):
         super().__init__()
         self.encoder = encoder
-        self.head = MultiTaskHead(tasks, rep_dim = rep_dim, cov_dim = cov_dim)
+        self.head = MultiTaskHead(
+            tasks,
+            rep_dim = rep_dim, 
+            cov_dim = cov_dim, 
+            hidden_dim = head_hidden, 
+            dropout = head_dropout
+        )
 
     # x = (batch_size, hours, d); cov = (batch_size, cov_dim)
     def forward(self, x, cov):
