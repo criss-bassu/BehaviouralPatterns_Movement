@@ -121,7 +121,7 @@ def compute_task_metric(df, task, metric_name, target_mean, target_std):
     return regression_metrics(real_target, pred_target)[metric_name]
 
 
-def participant_bootstrap(df, task, metric_name, target_mean, target_std, n_boot = 1000, seed = 42):
+def participant_bootstrap(df, task, metric_name, target_mean, target_std, n_boot = 1000, seed = 9626):
     """Bootstrap by participant, not week. Returns mean and 95% CI."""
     # Use a random number generator with a fixed seed for reproducibility
     rng = np.random.default_rng(seed)

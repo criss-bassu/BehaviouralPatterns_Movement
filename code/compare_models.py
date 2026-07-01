@@ -1,3 +1,4 @@
+import itertools
 import os
 import math
 import torch
@@ -5,7 +6,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from config import BINARY, NUMERICS, TARGET_COLS
+from config import (
+    BINARY,
+    NUMERICS,
+    FINAL_TRAINING,
+    GRID_TRAINING,
+    MODEL_SPECS,
+    OUTPUT_DIR,
+    SEED,
+    TARGET_COLS,
+)
 from preprocessing_01 import load_data
 from models_02 import MLPEncoder, CNNEncoder, GRUEncoder, WeeklyOutcomeModel
 from training_03 import fit_model
@@ -19,8 +29,14 @@ METRIC_NAME = {**{t: "auc_roc" for t in BINARY},
 
 REGRESSION_TASKS = NUMERICS
 
+def set_seed(seed = SEED):
+    """Sets the random seed for reproducibility."""
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-def _grid(n, max_cols):
+
+def grid(n, max_cols):
     """Rows and columns needed for a grid of n subplots."""
     # Calculate the number of columns, ensuring it does not exceed max_cols
     ncols = min(max_cols, n)
@@ -29,7 +45,113 @@ def _grid(n, max_cols):
     return nrows, ncols
 
 
+def build_encoder(name, data, hp):
+    """Builds an encoder based on the specified name and hyperparameters."""
+    if name == "MLP":
+        return MLPEncoder(
+            d = data["d"],
+            seq_len = data["seq_len"],
+            hidden_dim = hp["hidden_dim"],
+            rep_dim = hp["rep_dim"],
+            dropout = hp["dropout"]
+        )
+    if name == "CNN":
+        return CNNEncoder(
+            d = data["d"],
+            channels = hp["channels"],
+            rep_dim = hp["rep_dim"],
+            dropout = hp["dropout"],
+            kernel_size = hp["kernel_size"]
+        )
+    if name == "GRU":
+        return GRUEncoder(
+            d = data["d"],
+            hidden_dim = hp["hidden_dim"],
+            rep_dim = hp["rep_dim"],
+            num_layers = hp["num_layers"],
+            dropout = hp["dropout"]
+        )
+    raise ValueError(f"Model {name} not recognized")
+
+
+def build_model(name, data, hp):
+    """Builds a WeeklyOutcomeModel with the specified encoder and hyperparameters."""
+    encoder = build_encoder(name, data, hp)
+    return WeeklyOutcomeModel(
+        encoder = encoder,
+        tasks = TARGET_COLS,
+        rep_dim = hp["rep_dim"],
+        cov_dim = data["cov_dim"],
+        head_hidden = hp["head_hidden"],
+        head_dropout = hp["head_dropout"]
+    )
+
+
+def fit_with_hp(name, data, device, hp, training):
+    """Builds and trains a model with the given hyperparameters."""
+    model = build_model(name, data, hp)
+    model, history_df = fit_model(
+        model = model,
+        train_loader = data["train_loader"],
+        val_loader = data["val_loader"],
+        device = device,
+        lr = hp["lr"],
+        weight_decay = hp["weight_decay"],
+        max_epochs = training["max_epochs"],
+        patience = training["patience"],
+        warmup_epochs = training["warmup_epochs"],
+    )
+    return model, history_df
+
+
+def coerce_grid_value(value, grid_values):
+    """Coerces the value to the type of the first element in grid_values."""
+    template = grid_values[0]
+    if isinstance(template, int) and not isinstance(template, bool):
+        return int(value)
+    if isinstance(template, float):
+        return float(value)
+    return value
+
+
+def grid_search_model(name, spec, datos, device, output_dir):
+    """"Performs a grid search for the specified model and hyperparameter grid."""
+    grid = spec["grid"]
+    keys = list(grid.keys())
+    combinations = list(itertools.product(*grid.values()))
+
+    print(f"\n{'=' * 55}\n  Grid search: {name} ({len(combinations)} combinaciones)\n{'=' * 55}")
+
+    rows = []
+    for i, values in enumerate(combinations, 1):
+        candidate = dict(zip(keys, values))
+        hp = {**spec["base_hp"], **candidate}
+        set_seed()
+
+        _, history_df = fit_with_hp(name, datos, device, hp, GRID_TRAINING)
+        best_row = history_df.loc[history_df["val_loss"].idxmin()]
+        val_loss = float(best_row["val_loss"])
+
+        rows.append({
+            **candidate,
+            "val_loss": val_loss,
+            "best_epoch": int(best_row["epoch"]),
+            "epochs_run": int(len(history_df)),
+        })
+        print(f"  [{i:2d}/{len(combinations)}] {candidate} -> val_loss={val_loss:.4f}")
+
+    table = pd.DataFrame(rows).sort_values("val_loss").reset_index(drop=True)
+    table.to_csv(f"{output_dir}/grid_search_{name}.csv", index=False)
+    print(f"\n=== Mejor configuracion {name} ===")
+    print(table.head(5).to_string(index=False))
+
+    best_values = {key: coerce_grid_value(table.iloc[0][key], grid[key]) for key in keys}
+    best_hp = {**spec["base_hp"], **best_values}
+    return best_hp, table
+
+
 def run_model(model_name, encoder, data, device, weight_decay = 1e-4):
+    """Trains and evaluates a model with the specified encoder and hyperparameters."""
     print(f"\n{'='*55}\n  Training: {model_name}\n{'='*55}")
     # CREATE MODEL: WeeklyOutcomeModel takes the encoder and the tasks to predict
     # rep_dim = 64: bottleneck representation to reduce the number of parameters in the head -> lower the risk of overfitting
@@ -101,6 +223,18 @@ def run_model(model_name, encoder, data, device, weight_decay = 1e-4):
     return history_df, results
 
 
+def save_best_hyperparameters(best_hps, output_dir):
+    rows = []
+    for model_name, hp in best_hps.items():
+        row = {"Model": model_name}
+        row.update(hp)
+        rows.append(row)
+    tabla = pd.DataFrame(rows)
+    tabla.to_csv(f"{output_dir}/best_hyperparameters.csv", index = False)
+    print("\n=== BEST HYPERPARAMETERS ===")
+    print(tabla.to_string(index = False))
+
+
 def save_table(all_results, output_dir):
     """Saves a CSV file with the evaluation results for each model and task"""
     rows = []
@@ -119,7 +253,7 @@ def save_table(all_results, output_dir):
                 # If the task is a regression task, include Pearson
                 "pearson_r": round(res["pearson_r"], 4) if task in REGRESSION_TASKS else "",
                 "pearson_r IC 2.5%": round(res["pearson_r_ic_2_5"], 4) if task in REGRESSION_TASKS else "",
-                "pearson_r IC 97.5%":round(res["pearson_r_ic_97_5"],4) if task in REGRESSION_TASKS else "",
+                "pearson_r IC 97.5%":round(res["pearson_r_ic_97_5"],4) if task in REGRESSION_TASKS else ""
             }
             rows.append(row)
     table = pd.DataFrame(rows)
@@ -216,6 +350,7 @@ def draw_metrics_comparation(all_results, output_dir):
 
 
 def draw_pearson(all_results, output_dir):
+    """Draws a bar plot comparing the Pearson correlation for each model and regression task"""
     model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
     nrows, ncols = _grid(len(REGRESSION_TASKS), max_cols = 5)
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 3.2, nrows * 4), squeeze = False)
@@ -255,34 +390,32 @@ def draw_pearson(all_results, output_dir):
 
 
 def main():
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    output_dir = "../experiment_results"
+    output_dir = OUTPUT_DIR + "/comparison"
     # Create the output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok = True) # exist_ok = True -> If the directory already exists, do not raise an error
     print(f"Device: {device}")
 
     data = load_data()
 
-    model_configs = {
-        # MLP: hidden_dim reduced (256 -> 128) and high dropout because it is the most prone to overfitting:
-        # Ignores the temporal structure of the data and has a higher number of parameters in the head
-        "MLP": {"encoder": MLPEncoder(d = data["d"], hours = data["hours"], hidden_dim = 128, rep_dim = 64, dropout = 0.4),
-                "weight_decay": 1e-3},
-        # CNN and GRU: reduced rep_dim (128-> 64) for consistency and lower capacity of the head
-        "CNN": {"encoder": CNNEncoder(d = data["d"], channels = 64, rep_dim = 64, dropout = 0.3),
-                "weight_decay": 1e-4},
-        "GRU": {"encoder": GRUEncoder(d = data["d"], hidden_dim = 128, rep_dim = 64, num_layers = 1, dropout = 0.0),
-                "weight_decay": 1e-4}
-    }
+    best_hps = {}
+    for name, spec in MODEL_SPECS.items():
+        if spec.get("use_grid_search", True):
+            best_hps[name], _ = grid_search_model(name, spec, data, device, output_dir)
+        else:
+            best_hps[name] = dict(spec["base_hp"])
+            print(f"\n{name}: using fixed hyperparameters, without grid search")
+
+    save_best_hyperparameters(best_hps, output_dir)
 
     histories = {} # Initialize a dictionary to store the evolution of the losses for each model
     all_results = {} # Initialize a dictionary to store the results for each model
     # Iterate through each model and its corresponding configuration
-    for model_name, cfg in model_configs.items():
+    for model_name, hp_cfg in best_hps.items():
         # Train and evaluate the model, and store the training history and evaluation results
-        histories[model_name], all_results[model_name] = run_model(
-            model_name, cfg["encoder"], data, device, weight_decay = cfg["weight_decay"]
-        )
+        histories[model_name], all_results[model_name] = run_model(model_name, hp_cfg, data, device)
 
     save_table(all_results, output_dir) # Save a CSV file with the evaluation results for each model and task
     draw_loss_curves(histories, output_dir) # Draw the training and validation loss curves for each model
