@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import pandas as pd
 
-from config import BINARY, NUMERICS, TARGET_COLS, TASK_INDEX
+from config import BINARY, NUMERICS, TARGET_COLS, TARGET_INDEX
 
 # Calculate the mean of loss values, ignoring masked elements
 def masked_mean(loss_values, mask):
@@ -24,7 +24,7 @@ def multitask_loss(predicted_outcomes, real_outcomes, mask, task_weights = None)
 
     # Binary classification task: Use Binary cross-entropy loss
     for task in BINARY:
-        idx = TASK_INDEX[task]
+        idx = TARGET_INDEX[task]
         # Compute the binary cross-entropy loss between the predicted logits and the true labels for the current task
         # PD: logit = raw model output before applying the sigmoide function
         # Reduction = "none" -> The loss is computed for each sample without averaging
@@ -34,7 +34,7 @@ def multitask_loss(predicted_outcomes, real_outcomes, mask, task_weights = None)
 
     # Numerical tasks: Use Mean Squared Error
     for task in NUMERICS:
-        idx = TASK_INDEX[task]
+        idx = TARGET_INDEX[task]
         # Compute the mean squared error between the predicted values and the true values for the current task
         # ** 2 = Penalizes larger errors more heavily and prevents positive and negative errors from cancelling each other out
         mse = (predicted_outcomes[task] - real_outcomes[:, idx]) ** 2
@@ -50,8 +50,8 @@ def train_one_epoch(model, loader, optimiser, device):
     model.train() # Model in training mode
     total_loss = 0.0 # Initialize the total loss for the epoch
     for batch in loader:
-        x = batch["x"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
-        cov = batch["cov"].to(device) # Vector of clinical covariates (sample, covariates)
+        x = batch["descriptor"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
+        cov = batch["covariate"].to(device) # Vector of clinical covariates (sample, covariates)
         y = batch["target"].to(device) # Real clinical targets (sample, targets)
         mask = batch["mask"].to(device) # Mask indicating which clinical targets exist
 
@@ -84,8 +84,8 @@ def evaluate_loss(model, loader, device):
     model.eval()
     total_loss = 0.0
     for batch in loader:
-        x = batch["x"].to(device)
-        cov = batch["cov"].to(device)
+        x = batch["descriptor"].to(device)
+        cov = batch["covariate"].to(device)
         y = batch["target"].to(device)
         mask = batch["mask"].to(device)
 

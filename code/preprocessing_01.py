@@ -168,11 +168,11 @@ def load_data(
     )
 
     return {
-        "train_loader": train_loader, # DataLoader for training
-        "val_loader": val_loader, # DataLoader for validation
-        "test_loader": test_loader, # DataLoader for testing
+        "train_data": train_loader, # DataLoader for training
+        "val_data": val_loader, # DataLoader for validation
+        "test_data": test_loader, # DataLoader for testing
         "d": descriptors_scaled.shape[-1], # Number of descriptors
-        "seq_len": descriptors_scaled.shape[1], # Number of hours
+        "hours": descriptors_scaled.shape[1], # Number of hours
         "cov_dim": cov.shape[-1], # Dimensionality of clinical covariates
         "target_mean": target_mean, # Mean of the targets in the training set
         "target_std": target_std, # Standard deviation of the targets in the training set

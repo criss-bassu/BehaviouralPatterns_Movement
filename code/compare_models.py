@@ -1,0 +1,296 @@
+import os
+import math
+import torch
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+
+from config import BINARY, NUMERICS, TARGET_COLS
+from preprocessing_01 import load_data
+from models_02 import MLPEncoder, CNNEncoder, GRUEncoder, WeeklyOutcomeModel
+from training_03 import fit_model
+from evaluation_04 import collect_predictions, participant_bootstrap
+
+# Creates a dictionary that assigns the main metric to each task based on its type
+# Main metric per task: AUC-ROC for binary tasks, RMSE for numeric tasks
+# ** Unpacks the dictionary -> We merge both into one
+METRIC_NAME = {**{t: "auc_roc" for t in BINARY},
+               **{t: "rmse"    for t in NUMERICS}}
+
+REGRESSION_TASKS = NUMERICS
+
+
+def _grid(n, max_cols):
+    """Rows and columns needed for a grid of n subplots."""
+    # Calculate the number of columns, ensuring it does not exceed max_cols
+    ncols = min(max_cols, n)
+    # Calculate the number of rows needed to accommodate all subplots
+    nrows = math.ceil(n / ncols) #.ceil = Rounds up to the nearest integer
+    return nrows, ncols
+
+
+def run_model(model_name, encoder, data, device, weight_decay = 1e-4):
+    print(f"\n{'='*55}\n  Training: {model_name}\n{'='*55}")
+    # CREATE MODEL: WeeklyOutcomeModel takes the encoder and the tasks to predict
+    # rep_dim = 64: bottleneck representation to reduce the number of parameters in the head -> lower the risk of overfitting
+    model = WeeklyOutcomeModel(encoder = encoder, tasks = TARGET_COLS, rep_dim = 64, cov_dim = data["cov_dim"])
+    # TRAIN the MODEL, and return the training history and the best model
+    best_trained_model, history_df = fit_model(
+        model = model, # WeeklyOutcomeModel with the encoder and the tasks to predict
+        train_data = data["train_data"], # training data
+        val_data = data["val_data"], # validation data
+        device = device,
+        lr = 1e-3, # learning rate
+        weight_decay = weight_decay, # L2 regularization -> prevents overfitting by penalizing large weights
+        max_epochs = 100, # maximum number of epochs to train the model
+        patience = 8, # Early stopping -> Prevents overfitting when the validation loss stops improving for a number of epochs
+    )
+    print(f"  Epochs: {len(history_df)}  |  Best validation loss: {history_df['val_loss'].min():.4f}")
+
+    # EVALUATE the MODEL on the TEST set -> Get the predictions of the model over the test set
+    test_preds = collect_predictions(best_trained_model, data["test_data"], device = device)
+
+    results = {} # Initialize a dictionary to store the results for each task
+    for task in TARGET_COLS:
+        metric = METRIC_NAME[task] # auc-roc for binary targets; rmse for numeric targets
+        # Handling errors to ensure that the evaluation continues even if one task fails
+        try:
+            # For each target variable, compute the main metric and its 95% confidence interval using bootstrapping
+            boot = participant_bootstrap(
+                test_preds, # DataFrame with predictions, real values and masks for each task
+                task, # The target variable to evaluate
+                metric, # The main metric to compute for the target variable
+                target_mean = data["target_mean"], # Mean of the target variable in the training set (used for scaling back to original units)
+                target_std = data["target_std"], # Standard deviation of the target variable in the training set (used for scaling back to original units)
+                n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
+                seed = 42, # Random seed for reproducibility of the bootstrap results
+            )
+            # Store values of the metric for the current task in the dictionary
+            results[task] = {
+                "mean": boot["mean"], # Mean of the metric computed over the bootstrap samples
+                 "ic_2_5": boot["lower_2_5"], # Lower bound of the 95% confidence interval (2.5th percentile)
+                 "ic_97_5": boot["upper_97_5"] # Upper bound of the 95% confidence interval (97.5th percentile)
+            }
+        except Exception:
+            results[task] = {
+                "mean": float("nan"),
+                "ic_2_5": float("nan"),
+                "ic_97_5": float("nan")
+            }
+
+        if task in REGRESSION_TASKS:
+            try:
+                boot_r = participant_bootstrap(
+                    test_preds,
+                    task,
+                    "pearson_r",
+                    target_mean = data["target_mean"],
+                    target_std = data["target_std"],
+                    n_boot = 1000,
+                    seed = 42,
+                )
+                results[task]["pearson_r"] = boot_r["mean"]
+                results[task]["pearson_r_ic_2_5"] = boot_r["lower_2_5"]
+                results[task]["pearson_r_ic_97_5"] = boot_r["upper_97_5"]
+            except Exception:
+                results[task]["pearson_r"] = float("nan")
+                results[task]["pearson_r_ic_2_5"] = float("nan")
+                results[task]["pearson_r_ic_97_5"] = float("nan")
+
+    # Return the training history and the evaluation results for each target variable
+    return history_df, results
+
+
+def save_table(all_results, output_dir):
+    """Saves a CSV file with the evaluation results for each model and task"""
+    rows = []
+    # Iterate through each model and its corresponding results
+    for model_name, results in all_results.items():
+        # Iterate through the targets
+        for task in TARGET_COLS:
+            res = results[task]
+            row = {
+                "model": model_name,
+                "task": task,
+                "metric": METRIC_NAME[task],
+                "mean": round(res["mean"], 4), # Round the mean of the metric to 4 decimal places
+                "ic 2.5%": round(res["ic_2_5"], 4),
+                "ic 97.5%": round(res["ic_97_5"], 4),
+                # If the task is a regression task, include Pearson
+                "pearson_r": round(res["pearson_r"], 4) if task in REGRESSION_TASKS else "",
+                "pearson_r IC 2.5%": round(res["pearson_r_ic_2_5"], 4) if task in REGRESSION_TASKS else "",
+                "pearson_r IC 97.5%":round(res["pearson_r_ic_97_5"],4) if task in REGRESSION_TASKS else "",
+            }
+            rows.append(row)
+    table = pd.DataFrame(rows)
+    # index = False -> Do not include a column showing the index
+    table.to_csv(f"{output_dir}/models_comparation.csv", index = False)
+    print("\n=== COMPARATIVE TABLE ===")
+    print(table.to_string(index = False))
+
+
+def draw_loss_curves(histories, output_dir):
+    """Draws the training and validation loss curves for each model"""
+    # Creates a figure with 1 row and 3 columns of subplots, each subplot will show the loss curves for one model
+    fig, axes = plt.subplots(1, 3, figsize = (15, 4))
+    # Iterate through each axis and each model's corresponding training history
+    for ax, (model_name, df) in zip(axes, histories.items()):
+        # Draw the training loss curves for the current model
+        ax.plot(df["epoch"], df["train_loss"], color = "#2196F3", lw = 2, label = "Train")
+        # Draw the validation loss curves for the current model
+        ax.plot(df["epoch"], df["val_loss"], color = "#F44336", lw = 2, label = "Val")
+        # Highlight the epoch with the best validation loss (lowest value)
+        best = df.loc[df["val_loss"].idxmin()]
+        # Draw a vertical dashed line at the epoch with the best validation loss and mark it with a red dot
+        ax.axvline(best["epoch"], color = "gray", linestyle = "--", lw = 1, alpha = 0.7)
+        ax.scatter([best["epoch"]], [best["val_loss"]], color = "#F44336", zorder = 5, s = 50)
+        # Set the title, labels, legend, and grid for the current subplot
+        ax.set_title(f"{model_name} (epoch {int(best['epoch'])}, val = {best['val_loss']:.2f})", fontsize = 11, fontweight = "bold")
+        ax.set_xlabel("Epoch") # Set the x-axis label to "Epoch"
+        ax.set_ylabel("Loss") # Set the y-axis label to "Loss"
+        ax.legend(fontsize = 9) # Set the legend font size to 9
+        ax.grid(True, alpha = 0.3) # Set the grid with a transparency of 0.3
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(integer = True)) # Set the x-axis epochs to be integers only
+    fig.suptitle("Curves of loss by architecture", fontsize = 13, fontweight = "bold") # Set the main title of the figure
+    plt.tight_layout() # Adjust the layout of the subplots to prevent overlapping
+    # dpi= 150 -> resolution of the saved image (higher dpi = better quality)
+    plt.savefig(f"{output_dir}/loss_curves_comparison.png", dpi = 150)
+
+
+def draw_metrics_comparation(all_results, output_dir):
+    """Draws a bar plot comparing the main metric for each model and task"""
+    # Define a color for each model
+    model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
+    # Calculate the number of rows and columns needed for the grid of subplots, with a maximum of 3 columns
+    nrows, ncols = _grid(len(TARGET_COLS), max_cols = 3)
+    # Create a figure with the calculated number of rows and columns of subplots
+    fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4), squeeze = False)
+    axes_flat = list(axes.flat) # Flatten the 2D array of axes into a 1D list for easier iteration
+    # Iterate through each axis and each target variable to plot the metrics
+    for ax, task in zip(axes_flat, TARGET_COLS):
+        # Get the main metric for the current target variable (AUC-ROC for binary tasks, RMSE for numeric tasks)
+        metric = METRIC_NAME[task] 
+        # Get the mean of the metric for each model
+        means = [all_results[m][task]["mean"]  for m in all_results]
+        # Get the lower bound of the 95% confidence interval for each model
+        lowers = [all_results[m][task]["mean"] - all_results[m][task]["ic_2_5"]  for m in all_results]
+        # Get the upper bound of the 95% confidence interval for each model
+        uppers = [all_results[m][task]["ic_97_5"] - all_results[m][task]["mean"] for m in all_results]
+
+        # Draw a bar plot for the current target variable
+        bars = ax.bar(
+            list(all_results.keys()), # x-axis labels = model names
+            means, # y-axis values = mean of the metric for each model
+            color = [model_colors[m] for m in all_results], # colors for each model
+            yerr = [lowers, uppers], # error bars = lower and upper bounds of the 95% confidence interval
+            capsize = 6, # size of the caps on the error bars
+            error_kw = {"lw": 1.5} # line width of the error bars
+        )
+        # Set the titlefor the current subplot
+        ax.set_title(f"{task} ({metric.upper()})", fontweight = "bold")
+        # Set the y-axis label for the current subplot
+        ax.set_ylabel(metric.upper())
+        # Set the y-axis limits based on the type of task (0-1 for binary tasks, auto for numeric tasks)
+        ax.grid(True, axis = "y", alpha = 0.3)
+
+        # Highlight the best model for the current target variable based on the main metric
+            # For binary tasks, the best model is the one with the highest AUC-ROC
+            # For numeric tasks, the best model is the one with the lowest RMSE
+        best_idx = means.index(max(means) if metric == "auc_roc" else min(means))
+        bars[best_idx].set_edgecolor("black") # Set the edge color of the best model's bar to black
+        bars[best_idx].set_linewidth(2.5) # Set the line width of the best model's bar to 2.5
+
+    # Turn off the axes for any unused subplots
+    # If the number of target variables is less than the total number of subplots
+    for ax in axes_flat[len(TARGET_COLS):]:
+        ax.axis("off")
+
+    # Set the main title for the entire figure
+    fig.suptitle("Metric comparation in test (bootstrap 1000 it.)\n"
+                 "The best model per task is highlighted in bold",
+                 fontsize = 12, # Set the font size of the title to 12
+                 fontweight = "bold" # Set the font weight of the title to bold
+                 )
+    plt.tight_layout() # Adjust the layout of the subplots to prevent overlapping
+    plt.savefig(f"{output_dir}/metrics_comparation.png", dpi = 150)
+
+
+def draw_pearson(all_results, output_dir):
+    model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
+    nrows, ncols = _grid(len(REGRESSION_TASKS), max_cols = 5)
+    fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 3.2, nrows * 4), squeeze = False)
+    axes_flat = list(axes.flat)
+    for ax, task in zip(axes_flat, REGRESSION_TASKS):
+        means = [all_results[m][task]["pearson_r"] for m in all_results]
+        lowers = [all_results[m][task]["pearson_r"] - all_results[m][task]["pearson_r_ic_2_5"] for m in all_results]
+        uppers = [all_results[m][task]["pearson_r_ic_97_5"] - all_results[m][task]["pearson_r"] for m in all_results]
+
+        bars = ax.bar(list(all_results.keys()), 
+                      means,
+                      color = [model_colors[m] for m in all_results],
+                      yerr = [lowers, uppers], 
+                      capsize = 6, 
+                      error_kw = {"lw": 1.5})
+        ax.set_title(task, fontweight = "bold")
+        ax.set_ylabel("Pearson r")
+        ax.set_ylim(-1, 1)
+        ax.axhline(0, color = "gray", lw = 0.8, linestyle = "--")
+        ax.grid(True, axis = "y", alpha = 0.3)
+
+        valid = [v for v in means if not (v != v)]  # Exclude NaN values
+        if valid:
+            best_idx = means.index(max(valid))
+            bars[best_idx].set_edgecolor("black")
+            bars[best_idx].set_linewidth(2.5)
+
+    for ax in axes_flat[len(REGRESSION_TASKS):]:
+        ax.axis("off")
+
+    fig.suptitle("Pearson Correlation — Numerical Health Results\n"
+                 "(bootstrap 1000 it., IC 95%)  |  Black Border = Best Model",
+                 fontsize = 12, 
+                 fontweight = "bold")
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/pearson_correlation.png", dpi = 150)
+
+
+def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    output_dir = "../experiment_results"
+    # Create the output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok = True) # exist_ok = True -> If the directory already exists, do not raise an error
+    print(f"Device: {device}")
+
+    data = load_data()
+
+    model_configs = {
+        # MLP: hidden_dim reduced (256 -> 128) and high dropout because it is the most prone to overfitting:
+        # Ignores the temporal structure of the data and has a higher number of parameters in the head
+        "MLP": {"encoder": MLPEncoder(d = data["d"], hours = data["hours"], hidden_dim = 128, rep_dim = 64, dropout = 0.4),
+                "weight_decay": 1e-3},
+        # CNN and GRU: reduced rep_dim (128-> 64) for consistency and lower capacity of the head
+        "CNN": {"encoder": CNNEncoder(d = data["d"], channels = 64, rep_dim = 64, dropout = 0.3),
+                "weight_decay": 1e-4},
+        "GRU": {"encoder": GRUEncoder(d = data["d"], hidden_dim = 128, rep_dim = 64, num_layers = 1, dropout = 0.0),
+                "weight_decay": 1e-4}
+    }
+
+    histories = {} # Initialize a dictionary to store the evolution of the losses for each model
+    all_results = {} # Initialize a dictionary to store the results for each model
+    # Iterate through each model and its corresponding configuration
+    for model_name, cfg in model_configs.items():
+        # Train and evaluate the model, and store the training history and evaluation results
+        histories[model_name], all_results[model_name] = run_model(
+            model_name, cfg["encoder"], data, device, weight_decay = cfg["weight_decay"]
+        )
+
+    save_table(all_results, output_dir) # Save a CSV file with the evaluation results for each model and task
+    draw_loss_curves(histories, output_dir) # Draw the training and validation loss curves for each model
+    draw_metrics_comparation(all_results, output_dir) # Draw a bar plot comparing the main metric for each model and task
+    draw_pearson(all_results, output_dir) # Draw a bar plot comparing the Pearson correlation for each model and regression task
+    print(f"\nResults in: '{output_dir}/'") # Print the directory where the results are saved
+    print("=== COMPARISON COMPLETED ===")
+
+
+if __name__ == "__main__":
+    main()

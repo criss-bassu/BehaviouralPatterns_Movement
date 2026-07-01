@@ -6,7 +6,7 @@ from sklearn.metrics import (roc_auc_score, accuracy_score, f1_score,
                               root_mean_squared_error, r2_score)
 from scipy.stats import pearsonr
 
-from config import BINARY, TARGET_COLS, TASK_INDEX
+from config import BINARY, TARGET_COLS, TARGET_INDEX
 
 
 # threshold = < 0.5 = 0; >= 0.5 = 1
@@ -75,8 +75,8 @@ def collect_predictions(model, loader, device):
     model.eval()
     rows = [] # Initialize a list to store the rows of the DataFrame
     for batch in loader:
-        x = batch["x"].to(device)
-        cov = batch["cov"].to(device)
+        x = batch["descriptor"].to(device)
+        cov = batch["covariate"].to(device)
         outputs = model(x, cov) # Forward pass: model predicts the outcomes based on the input data
 
         # Convert the outputs to numpy arrays for easier manipulation (for each target to predict)
@@ -90,7 +90,7 @@ def collect_predictions(model, loader, device):
             # Create a dictionary for each participant
             row = {"participant_id": idx}
             for task in TARGET_COLS:
-                j = TASK_INDEX[task] # Get the column index for the current target
+                j = TARGET_INDEX[task] # Get the column index for the current target
                 row[f"{task}_real"] = target_np[i, j] # Get the real value of the current target for the current participant
                 row[f"{task}_pred"] = out_np[task][i] # Get the predicted value of the current target for the current participant
                 row[f"{task}_mask"] = mask_np[i, j] # Get the mask value of the current target for the current participant
@@ -114,7 +114,7 @@ def compute_task_metric(df, task, metric_name, target_mean, target_std):
         # [metric_name] returns the metric we're interested in
 
     # If the target task is not binary, compute the regression metrics:
-    j = TASK_INDEX[task]
+    j = TARGET_INDEX[task]
     # De-normalization: rescale the real and predicted target values to their original scale
     real_target = real_target * target_std[j] + target_mean[j]
     pred_target = pred_target * target_std[j] + target_mean[j]
