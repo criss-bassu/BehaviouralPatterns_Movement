@@ -45,40 +45,38 @@ def grid(n, max_cols):
     return nrows, ncols
 
 
-def build_encoder(name, data, hp):
+def build_encoder(model_name, data, hp):
     """Builds an encoder based on the specified name and hyperparameters."""
-    if name == "MLP":
+    if model_name == "MLP":
         return MLPEncoder(
             d = data["d"],
             hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
             rep_dim = hp["rep_dim"],
-            dropout = hp["dropout"]
+            dropout = hp["dropout"],
         )
-    if name == "CNN":
+    if model_name == "CNN":
         return CNNEncoder(
             d = data["d"],
             channels = hp["channels"],
-            hours = data["hours"],
             rep_dim = hp["rep_dim"],
             dropout = hp["dropout"],
-            kernel_size = hp["kernel_size"]
+            kernel_size = hp["kernel_size"],
         )
-    if name == "GRU":
+    if model_name == "GRU":
         return GRUEncoder(
             d = data["d"],
-            hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
             rep_dim = hp["rep_dim"],
             num_layers = hp["num_layers"],
-            dropout = hp["dropout"]
+            dropout = hp["dropout"],
         )
-    raise ValueError(f"Model {name} not recognized")
+    raise ValueError(f"Model {model_name} not recognized")
 
 
-def build_model(name, data, hp):
+def build_model(model_name, data, hp):
     """Builds a WeeklyOutcomeModel with the specified encoder and hyperparameters."""
-    encoder = build_encoder(name, data, hp)
+    encoder = build_encoder(model_name, data, hp)
     return WeeklyOutcomeModel(
         encoder = encoder,
         tasks = TARGET_COLS,
@@ -251,7 +249,7 @@ def save_table(all_results, output_dir):
             rows.append(row)
     table = pd.DataFrame(rows)
     # index = False -> Do not include a column showing the index
-    table.to_csv(f"{output_dir}/models_comparation.csv", index = False)
+    table.to_csv(f"{output_dir}/models_comparison.csv", index = False)
     print("\n=== COMPARATIVE TABLE ===")
     print(table.to_string(index = False))
 
@@ -284,7 +282,7 @@ def draw_loss_curves(histories, output_dir):
     plt.savefig(f"{output_dir}/loss_curves_comparison.png", dpi = 150)
 
 
-def draw_metrics_comparation(all_results, output_dir):
+def draw_metrics_comparison(all_results, output_dir):
     """Draws a bar plot comparing the main metric for each model and task"""
     # Define a color for each model
     model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
@@ -333,13 +331,13 @@ def draw_metrics_comparation(all_results, output_dir):
         ax.axis("off")
 
     # Set the main title for the entire figure
-    fig.suptitle("Metric comparation in test (bootstrap 1000 it.)\n"
+    fig.suptitle("Metric comparison in test (bootstrap 1000 it.)\n"
                  "The best model per task is highlighted in bold",
                  fontsize = 12, # Set the font size of the title to 12
                  fontweight = "bold" # Set the font weight of the title to bold
                  )
     plt.tight_layout() # Adjust the layout of the subplots to prevent overlapping
-    plt.savefig(f"{output_dir}/metrics_comparation.png", dpi = 150)
+    plt.savefig(f"{output_dir}/metrics_comparison.png", dpi = 150)
 
 
 def draw_pearson(all_results, output_dir):
@@ -412,7 +410,7 @@ def main():
 
     save_table(all_results, output_dir) # Save a CSV file with the evaluation results for each model and task
     draw_loss_curves(histories, output_dir) # Draw the training and validation loss curves for each model
-    draw_metrics_comparation(all_results, output_dir) # Draw a bar plot comparing the main metric for each model and task
+    draw_metrics_comparison(all_results, output_dir) # Draw a bar plot comparing the main metric for each model and task
     draw_pearson(all_results, output_dir) # Draw a bar plot comparing the Pearson correlation for each model and regression task
     print(f"\nResults in: '{output_dir}/'") # Print the directory where the results are saved
     print("=== COMPARISON COMPLETED ===")

@@ -114,7 +114,7 @@ def load_data(
     # If the standard deviation is 0, we replace it with 1 to avoid division by zero
     raw_descriptors_std = np.nanstd(descriptors_train_flat, axis = 0)
     descriptors_std  = np.where(
-        raw_descriptors_std == 0 | np.isnan(raw_descriptors_std),
+        (raw_descriptors_std == 0) | np.isnan(raw_descriptors_std),
         1.0,
         raw_descriptors_std
     )
