@@ -15,6 +15,7 @@ COVARIABLES = []
 
 # Accelerometry tensor file path (Participants, hours, variables)
 TENSOR_PATH = "../data/tensor_X.npy"
+PARQUET_PATH = "../data/dfParticipants.parquet"
 # Output directory for results
 OUTPUT_DIR = "../results"
 
@@ -35,13 +36,11 @@ FINAL_TRAINING = {
 
 
 # Common hyperparameters to the three architectures
-# 
 BASE_HP = {
     "lr": 1e-3,
     "head_hidden": 128,
     "head_dropout": 0.3,
 }
-
 
 # Config per architecture:
 MODEL_SPECS = {

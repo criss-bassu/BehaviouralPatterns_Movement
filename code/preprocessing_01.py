@@ -6,7 +6,7 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 
-from config import BINARY, TARGET_COLS
+from config import BINARY, COVARIABLES, TARGET_COLS, TENSOR_PATH, PARQUET_PATH
 
 
 class WeeklyAccelerometryDataset(Dataset):
@@ -62,8 +62,8 @@ class WeeklyAccelerometryDataset(Dataset):
 # Loads, partitions and normalizes the data
 # Returns loaders and scalers
 def load_data(
-    descriptors_path = "../data/tensor_X.npy",
-    df_path = "../data/dfParticipants.parquet",
+    descriptors_path = TENSOR_PATH,
+    df_path = PARQUET_PATH,
     batch_size_train = 64,
     batch_size_eval = 128,
     random_state = 42,
@@ -109,26 +109,23 @@ def load_data(
     # Flatten the accelerometry tensor to NORMALISE it (mean/std of the training dataset)
     descriptors_train_flat = descriptors[train_idx].reshape(-1, descriptors.shape[-1])
     # Compute the mean of each descriptor
-    descriptors_mean = descriptors_train_flat.mean(axis = 0)
+    descriptors_mean = np.nanmean(descriptors_train_flat, axis = 0)
     # Compute the standard deviation of each descriptor
     # If the standard deviation is 0, we replace it with 1 to avoid division by zero
-    descriptors_std  = np.where(descriptors_train_flat.std(axis = 0) == 0, 1.0, descriptors_train_flat.std(axis = 0))
-    # Descriptors normalized (NaN -> 0)
-    descriptors_scaled = np.nan_to_num((descriptors - descriptors_mean) / descriptors_std, nan = 0.0)
-
-    # NORMALISE clinical covariants (bmi, age, sex)
-    cov_cols  = [c for c in df.columns
-                 if c not in ["idweek", "participant_id", "Tiempo", "split"] + TARGET_COLS]
-    # Get the clinical covariates of the training samples
-    cov_train = df.loc[train_idx, cov_cols]
-    # Compute the mean of each clinical covariate in the training set
-    cov_mean  = cov_train.mean()
-    # Compute the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
-    cov_std   = cov_train.std().replace(0, 1)
-    # Normalise the clinical covariates of all samples (NaN -> 0)
-    cov = np.nan_to_num(
-        ((df[cov_cols] - cov_mean) / cov_std).to_numpy(dtype = "float32"), nan = 0.0
+    raw_descriptors_std = np.nanstd(descriptors_train_flat, axis = 0)
+    descriptors_std  = np.where(
+        raw_descriptors_std == 0 | np.isnan(raw_descriptors_std),
+        1.0,
+        raw_descriptors_std
     )
+    # Descriptors normalized (NaN -> 0)
+    descriptors_scaled = np.nan_to_num(
+        (descriptors - descriptors_mean) / descriptors_std, 
+        nan = 0.0
+    )
+
+    # NORMALISE clinical covariants (if used)
+    cov = normalize_covariables(df, train_idx)
 
     # MASKS and NORMALISATION of predictive outcomes
     target_raw = df[TARGET_COLS].to_numpy(dtype = "float32") # DMT2, sf36, sedentary, bdi, mmse, chair_stand
@@ -189,6 +186,28 @@ def verify_no_leakage(df):
     assert splits["train"].isdisjoint(splits["test"])
     # Check that the participants in "validation" are not in "test"
     assert splits["validation"].isdisjoint(splits["test"])
+
+def normalize_covariables(df, train_idx):
+    missing  = [c for c in COVARIABLES if c not in df.columns]
+
+    if missing:
+        raise ValueError(f"Covariables not found in DataFrame: {missing}")
+    
+    if not COVARIABLES:
+        return np.zeros((len(df), 0), dtype = "float32")
+    
+    # Get the clinical covariates of the training samples
+    cov_train = df.loc[train_idx, COVARIABLES]
+    # Compute the mean of each clinical covariate in the training set
+    cov_mean  = cov_train.mean()
+    # Compute the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
+    cov_std   = cov_train.std().replace(0, 1)
+    # Normalise the clinical covariates of all samples (NaN -> 0)
+    cov = np.nan_to_num(
+        ((df[COVARIABLES] - cov_mean) / cov_std).to_numpy(dtype = "float32"),
+        nan = 0.0
+    )
+    return cov
 
 
 # Standarizes the numeric targets using statistics from the training set. Binary targets are not scaled.
