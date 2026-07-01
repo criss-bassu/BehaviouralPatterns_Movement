@@ -50,7 +50,7 @@ def build_encoder(name, data, hp):
     if name == "MLP":
         return MLPEncoder(
             d = data["d"],
-            seq_len = data["seq_len"],
+            hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
             rep_dim = hp["rep_dim"],
             dropout = hp["dropout"]
@@ -59,6 +59,7 @@ def build_encoder(name, data, hp):
         return CNNEncoder(
             d = data["d"],
             channels = hp["channels"],
+            hours = data["hours"],
             rep_dim = hp["rep_dim"],
             dropout = hp["dropout"],
             kernel_size = hp["kernel_size"]
@@ -66,6 +67,7 @@ def build_encoder(name, data, hp):
     if name == "GRU":
         return GRUEncoder(
             d = data["d"],
+            hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
             rep_dim = hp["rep_dim"],
             num_layers = hp["num_layers"],
@@ -87,18 +89,19 @@ def build_model(name, data, hp):
     )
 
 
-def fit_with_hp(name, data, device, hp, training):
+def fit_with_hp(model_name, data, device, hp, training):
     """Builds and trains a model with the given hyperparameters."""
-    model = build_model(name, data, hp)
+    model = build_model(model_name, data, hp)
+    # TRAIN the MODEL, and return the training history and the best model
     model, history_df = fit_model(
-        model = model,
-        train_loader = data["train_loader"],
-        val_loader = data["val_loader"],
+        model = model, # WeeklyOutcomeModel with the encoder and the tasks to predict
+        train_data = data["train_data"], # training data
+        val_data = data["val_data"], # validation data
         device = device,
-        lr = hp["lr"],
-        weight_decay = hp["weight_decay"],
-        max_epochs = training["max_epochs"],
-        patience = training["patience"],
+        lr = hp["lr"],  # learning rate
+        weight_decay = hp["weight_decay"], # L2 regularization -> prevents overfitting by penalizing large weights
+        max_epochs = training["max_epochs"], # maximum number of epochs to train the model
+        patience = training["patience"], # Early stopping -> Prevents overfitting when the validation loss stops improving for a number of epochs
         warmup_epochs = training["warmup_epochs"],
     )
     return model, history_df
@@ -150,27 +153,17 @@ def grid_search_model(name, spec, datos, device, output_dir):
     return best_hp, table
 
 
-def run_model(model_name, encoder, data, device, weight_decay = 1e-4):
+def run_model(model_name, hp, data, device):
     """Trains and evaluates a model with the specified encoder and hyperparameters."""
-    print(f"\n{'='*55}\n  Training: {model_name}\n{'='*55}")
-    # CREATE MODEL: WeeklyOutcomeModel takes the encoder and the tasks to predict
-    # rep_dim = 64: bottleneck representation to reduce the number of parameters in the head -> lower the risk of overfitting
-    model = WeeklyOutcomeModel(encoder = encoder, tasks = TARGET_COLS, rep_dim = 64, cov_dim = data["cov_dim"])
-    # TRAIN the MODEL, and return the training history and the best model
-    best_trained_model, history_df = fit_model(
-        model = model, # WeeklyOutcomeModel with the encoder and the tasks to predict
-        train_data = data["train_data"], # training data
-        val_data = data["val_data"], # validation data
-        device = device,
-        lr = 1e-3, # learning rate
-        weight_decay = weight_decay, # L2 regularization -> prevents overfitting by penalizing large weights
-        max_epochs = 100, # maximum number of epochs to train the model
-        patience = 8, # Early stopping -> Prevents overfitting when the validation loss stops improving for a number of epochs
-    )
+    print(f"\n{'=' * 55}\n  Final Training: {model_name}\n{'=' * 55}")
+    print("  Hyperparameters:", {k: hp[k] for k in sorted(hp)})
+
+    set_seed()
+    model, history_df = fit_with_hp(model_name, data, device, hp, FINAL_TRAINING)
     print(f"  Epochs: {len(history_df)}  |  Best validation loss: {history_df['val_loss'].min():.4f}")
 
     # EVALUATE the MODEL on the TEST set -> Get the predictions of the model over the test set
-    test_preds = collect_predictions(best_trained_model, data["test_data"], device = device)
+    test_preds = collect_predictions(model, data["test_data"], device = device)
 
     results = {} # Initialize a dictionary to store the results for each task
     for task in TARGET_COLS:
@@ -296,7 +289,7 @@ def draw_metrics_comparation(all_results, output_dir):
     # Define a color for each model
     model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
     # Calculate the number of rows and columns needed for the grid of subplots, with a maximum of 3 columns
-    nrows, ncols = _grid(len(TARGET_COLS), max_cols = 3)
+    nrows, ncols = grid(len(TARGET_COLS), max_cols = 3)
     # Create a figure with the calculated number of rows and columns of subplots
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4), squeeze = False)
     axes_flat = list(axes.flat) # Flatten the 2D array of axes into a 1D list for easier iteration
@@ -352,7 +345,7 @@ def draw_metrics_comparation(all_results, output_dir):
 def draw_pearson(all_results, output_dir):
     """Draws a bar plot comparing the Pearson correlation for each model and regression task"""
     model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
-    nrows, ncols = _grid(len(REGRESSION_TASKS), max_cols = 5)
+    nrows, ncols = grid(len(REGRESSION_TASKS), max_cols = 5)
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 3.2, nrows * 4), squeeze = False)
     axes_flat = list(axes.flat)
     for ax, task in zip(axes_flat, REGRESSION_TASKS):
