@@ -121,7 +121,7 @@ def grid_search_model(name, spec, datos, device, output_dir):
     keys = list(grid.keys())
     combinations = list(itertools.product(*grid.values()))
 
-    print(f"\n{'=' * 55}\n  Grid search: {name} ({len(combinations)} combinaciones)\n{'=' * 55}")
+    print(f"\n{'=' * 55}\n  Grid search: {name} ({len(combinations)} combinations)\n{'=' * 55}")
 
     rows = []
     for i, values in enumerate(combinations, 1):
@@ -139,11 +139,11 @@ def grid_search_model(name, spec, datos, device, output_dir):
             "best_epoch": int(best_row["epoch"]),
             "epochs_run": int(len(history_df)),
         })
-        print(f"  [{i:2d}/{len(combinations)}] {candidate} -> val_loss={val_loss:.4f}")
+        print(f"  [{i:2d}/{len(combinations)}] {candidate} -> val_loss = {val_loss:.4f}")
 
     table = pd.DataFrame(rows).sort_values("val_loss").reset_index(drop=True)
     table.to_csv(f"{output_dir}/grid_search_{name}.csv", index=False)
-    print(f"\n=== Mejor configuracion {name} ===")
+    print(f"\n=== Best configuration {name} ===")
     print(table.head(5).to_string(index=False))
 
     best_values = {key: coerce_grid_value(table.iloc[0][key], grid[key]) for key in keys}
