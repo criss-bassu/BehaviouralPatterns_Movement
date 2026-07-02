@@ -106,48 +106,65 @@ def fit_with_hp(model_name, data, device, hp, training):
 
 
 def coerce_grid_value(value, grid_values):
-    """Coerces the value to the type of the first element in grid_values."""
+    """Converts the type of the value to the type of the first element in grid_values."""
     template = grid_values[0]
+    # Checks if the template is an integer and not a boolean (booleans are subclasses of integers in Python)
     if isinstance(template, int) and not isinstance(template, bool):
+        # Converts the value to an integer
         return int(value)
+    # Checks if the template is a float
     if isinstance(template, float):
+        # Converts the value to a float
         return float(value)
     return value
 
 
-def grid_search_model(name, spec, datos, device, output_dir):
-    """"Performs a grid search for the specified model and hyperparameter grid."""
-    grid = spec["grid"]
-    keys = list(grid.keys())
-    combinations = list(itertools.product(*grid.values()))
+def grid_search_model(model_name, spec, data, device, output_dir):
+    """Performs a grid search for the specified model and hyperparameter grid."""
+    grid = spec["grid"] # Get the "grid" part from the dictionary of the model's configuration
+    keys = list(grid.keys()) # Names of the hyperparameters to test
+    # * Unpacks the values of the grid dictionary into separate lists
+    combinations = list(itertools.product(*grid.values())) # All combinations of hyperparameter values to test
 
-    print(f"\n{'=' * 55}\n  Grid search: {name} ({len(combinations)} combinations)\n{'=' * 55}")
+    print(f"\n{'=' * 55}\n  Grid search: {model_name} ({len(combinations)} combinations)\n{'=' * 55}")
 
-    rows = []
-    for i, values in enumerate(combinations, 1):
-        candidate = dict(zip(keys, values))
-        hp = {**spec["base_hp"], **candidate}
+    rows = [] # Initialize a list to store the results of each hyperparameter combination
+    # Iterate through each combination of hyperparameter values
+    for i, values in enumerate(combinations, 1): # Starts counting from 1 for better readability in the output
+        candidate = dict(zip(keys, values)) # Dictionary mapping hyperparameter names to their corresponding values for the current combination
+        # ** Unpacks dictionaries
+        hp = {**spec["base_hp"], **candidate} # Merges the base hyperparameters with the current candidate hyperparameters, giving priority to the candidate values
+        
         set_seed()
 
-        _, history_df = fit_with_hp(name, datos, device, hp, GRID_TRAINING)
+        # Train the model with the current hyperparameter combination and get the training history
+        _, history_df = fit_with_hp(model_name, data, device, hp, GRID_TRAINING)
+        # Get the row with the best validation loss (lowest value)
         best_row = history_df.loc[history_df["val_loss"].idxmin()]
         val_loss = float(best_row["val_loss"])
 
+        # Store the results of the current hyperparameter combination
         rows.append({
-            **candidate,
-            "val_loss": val_loss,
-            "best_epoch": int(best_row["epoch"]),
-            "epochs_run": int(len(history_df)),
+            **candidate, # Unpacks the candidate hyperparameters into the dictionary
+            "val_loss": val_loss, # Validation loss for the current hyperparameter combination
+            "best_epoch": int(best_row["epoch"]), # Epoch number where the best validation loss was achieved
+            "epochs_run": int(len(history_df)) # Number of epochs run for the current hyperparameter combination (early stopping)
         })
         print(f"  [{i:2d}/{len(combinations)}] {candidate} -> val_loss = {val_loss:.4f}")
 
-    table = pd.DataFrame(rows).sort_values("val_loss").reset_index(drop=True)
-    table.to_csv(f"{output_dir}/grid_search_{name}.csv", index=False)
-    print(f"\n=== Best configuration {name} ===")
-    print(table.head(5).to_string(index=False))
+    # Sort the combinations by validation loss in ascending order (best first) and reset the index
+    table = pd.DataFrame(rows).sort_values("val_loss").reset_index(drop = True)
+    # Save the results of the grid search without including the index column
+    table.to_csv(f"{output_dir}/grid_search_{model_name}.csv", index = False)
+    print(f"\n=== Best configuration {model_name} ===")
+    # Print the best 5 combinations found during the grid search
+    print(table.head(5).to_string(index = False))
 
+    # Changes the best hyperparameter values' type to the correct original type
+    # Pandas sometimes changes the types when creating a DataFrame
     best_values = {key: coerce_grid_value(table.iloc[0][key], grid[key]) for key in keys}
-    best_hp = {**spec["base_hp"], **best_values}
+    # Merges the base hyperparameters with the best hyperparameter values found during the grid search
+    best_hp = {**spec["base_hp"], **best_values} # Dictionary with the best hyperparameters for the model
     return best_hp, table
 
 
@@ -193,15 +210,17 @@ def run_model(model_name, hp, data, device):
 
         if task in REGRESSION_TASKS:
             try:
+                # For regression tasks, compute the Pearson correlation coefficient and its 95% confidence interval using bootstrapping
                 boot_r = participant_bootstrap(
-                    test_preds,
-                    task,
-                    "pearson_r",
-                    target_mean = data["target_mean"],
-                    target_std = data["target_std"],
-                    n_boot = 1000,
-                    seed = 42,
+                    test_preds, # DataFrame with predictions, real values and masks for each task
+                    task, # The target variable to evaluate
+                    "pearson_r", # Metric to compute: Pearson correlation coefficient
+                    target_mean = data["target_mean"], # Mean of the target variable in the training set (for scaling back to original units)
+                    target_std = data["target_std"], # Standard deviation of the target variable in the training set (for scaling back to original units)
+                    n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
+                    seed = 9626
                 )
+                # Store the Pearson correlation coefficient and its confidence interval for the current task
                 results[task]["pearson_r"] = boot_r["mean"]
                 results[task]["pearson_r_ic_2_5"] = boot_r["lower_2_5"]
                 results[task]["pearson_r_ic_97_5"] = boot_r["upper_97_5"]
@@ -215,15 +234,16 @@ def run_model(model_name, hp, data, device):
 
 
 def save_best_hyperparameters(best_hps, output_dir):
-    rows = []
+    rows = [] # Initialize a list to store the best hyperparameters for each model
+    # Iterate through each model and its corresponding best hyperparameters
     for model_name, hp in best_hps.items():
         row = {"Model": model_name}
         row.update(hp)
         rows.append(row)
-    tabla = pd.DataFrame(rows)
-    tabla.to_csv(f"{output_dir}/best_hyperparameters.csv", index = False)
+    table = pd.DataFrame(rows)
+    table.to_csv(f"{output_dir}/best_hyperparameters.csv", index = False)
     print("\n=== BEST HYPERPARAMETERS ===")
-    print(tabla.to_string(index = False))
+    print(table.to_string(index = False))
 
 
 def save_table(all_results, output_dir):
@@ -389,15 +409,17 @@ def main():
     os.makedirs(output_dir, exist_ok = True) # exist_ok = True -> If the directory already exists, do not raise an error
     print(f"Device: {device}")
 
+    # Data loading and preprocessing
     data = load_data()
 
+    # Grid search per model
     best_hps = {}
-    for name, spec in MODEL_SPECS.items():
+    for model_name, spec in MODEL_SPECS.items():
         if spec.get("use_grid_search", True):
-            best_hps[name], _ = grid_search_model(name, spec, data, device, output_dir)
+            best_hps[model_name], _ = grid_search_model(model_name, spec, data, device, output_dir)
         else:
-            best_hps[name] = dict(spec["base_hp"])
-            print(f"\n{name}: using fixed hyperparameters, without grid search")
+            best_hps[model_name] = dict(spec["base_hp"])
+            print(f"\n{model_name}: using fixed hyperparameters, without grid search")
 
     save_best_hyperparameters(best_hps, output_dir)
 
