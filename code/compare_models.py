@@ -401,6 +401,7 @@ def draw_pearson(all_results, output_dir):
 
 
 def main():
+    # Set the working directory to the directory of this script
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
