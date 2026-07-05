@@ -193,7 +193,7 @@ def run_model(model_name, hp, data, device):
                 target_mean = data["target_mean"], # Mean of the target variable in the training set (used for scaling back to original units)
                 target_std = data["target_std"], # Standard deviation of the target variable in the training set (used for scaling back to original units)
                 n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
-                seed = 42, # Random seed for reproducibility of the bootstrap results
+                seed = 9626, # Random seed for reproducibility of the bootstrap results
             )
             # Store values of the metric for the current task in the dictionary
             results[task] = {

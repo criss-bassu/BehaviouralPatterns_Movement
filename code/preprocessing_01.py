@@ -61,13 +61,7 @@ class WeeklyAccelerometryDataset(Dataset):
 
 # Loads, partitions and normalizes the data
 # Returns loaders and scalers
-def load_data(
-    descriptors_path = TENSOR_PATH,
-    df_path = PARQUET_PATH,
-    batch_size_train = 64,
-    batch_size_eval = 128,
-    random_state = 42,
-):
+def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size_train = 64, batch_size_eval = 128, random_state = 9626):
     # Load the data
     descriptors = np.load(descriptors_path)
     df = pd.read_parquet(df_path)
