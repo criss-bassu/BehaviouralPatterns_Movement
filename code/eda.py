@@ -114,6 +114,8 @@ def draw_correlation_heatmap(df, output_dir):
     """Draws a Pearson correlation heatmap for clinical variables."""
     # Select the clinical variables for correlation
     clinical_vars = COVARIABLES + NUMERICS + BINARY
+    # Only include numeric columns present in the DataFrame
+    clinical_vars = [v for v in clinical_vars if v in df.columns and df[v].dtype in ['float64', 'float32']]
 
     # Compute correlation matrix (ignoring NaN values)
     corr_matrix = df[clinical_vars].corr(method = "pearson")
@@ -152,46 +154,82 @@ def draw_demographics(df, output_dir):
     # Compute measurement weeks per participant
     weeks_per_participant = df.groupby("participant_id").size()
 
-    fig, axes = plt.subplots(1, 4, figsize = (20, 4))
+    n_covariables = len(COVARIABLES)
+    n_plots = n_covariables + 1
+    
+    if n_plots <= 3:
+        ncols = n_plots
+        nrows = 1
+    elif n_plots <= 6:
+        ncols = 3
+        nrows = 2
+    else:
+        ncols = 3
+        nrows = (n_plots + 2) // 3
 
-    # Sex histogram
-    axes[0].hist(df_unique["sex"], bins = 20, color = "#DD6E91", edgecolor = "black", alpha = 0.7)
-    axes[0].set_title("Sex (participants)", fontsize = 11, fontweight = "bold")
-    axes[0].set_xlabel("sex")
-    axes[0].set_ylabel("count")
-    axes[0].grid(True, alpha = 0.3)
+    fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4))
+    
+    if n_plots == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
 
-    # Age histogram
-    axes[1].hist(df_unique["age"], bins = 20, color = "#2196F3", edgecolor = "black", alpha = 0.7)
-    axes[1].set_title("Age (participants)", fontsize = 11, fontweight = "bold")
-    axes[1].set_xlabel("years")
-    axes[1].set_ylabel("count")
-    axes[1].grid(True, alpha = 0.3)
+    axis_idx = 0
+    numeric_covariables = ["age", "bmi"]
+    numeric_colors = {"age": "#9C27B0", "bmi": "#FF9800"}
 
-    # BMI histogram
-    axes[2].hist(df_unique["bmi"], bins = 20, color = "#FF9800", edgecolor = "black", alpha = 0.7)
-    axes[2].set_title("BMI (participants)", fontsize = 11, fontweight = "bold")
-    axes[2].set_xlabel("kg/m^2")
-    axes[2].set_ylabel("count")
-    axes[2].grid(True, alpha = 0.3)
+    for cov in COVARIABLES:
+        if cov in numeric_covariables:
+            ax = axes[axis_idx]
+            data = df_unique[cov].dropna()
+            ax.hist(data, bins = 20, color = numeric_colors[cov], edgecolor = "black", alpha = 0.7)
+            ax.set_title(f"{cov.upper()} (participants)", fontsize = 11, fontweight = "bold")
+            ax.set_xlabel("units" if cov == "age" else "kg/m^2")
+            ax.set_ylabel("count")
+            ax.grid(True, alpha = 0.3)
+            axis_idx += 1
 
-    # Measurement weeks per participant histogram
-    axes[3].hist(weeks_per_participant, bins = range(1, 12), color = "#9C27B0", edgecolor = "black", alpha = 0.7)
-    axes[3].set_title("Measurement weeks per participant", fontsize = 11, fontweight = "bold")
-    axes[3].set_xlabel("# weeks")
-    axes[3].set_ylabel("count")
-    axes[3].grid(True, alpha = 0.3)
+        elif cov == "sex":
+            ax = axes[axis_idx]
+            data_sex = df_unique[cov].dropna()
+            counts = data_sex.value_counts().sort_index()
+            labels = ["Female (0)", "Male (1)"]
+            colors = ["#FF6B9D", "#4A90E2"]
+
+            bars = ax.bar(labels[:len(counts)], counts.values, color = colors[:len(counts)], 
+                         edgecolor = "black", alpha = 0.7)
+
+            for bar, count in zip(bars, counts.values):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height, f"{int(count)}",
+                       ha = "center", va = "bottom", fontsize = 10, fontweight = "bold")
+
+            ax.set_title(f"{cov.upper()} (participants)", fontsize = 11, fontweight = "bold")
+            ax.set_ylabel("count")
+            ax.grid(True, alpha = 0.3, axis = "y")
+            axis_idx += 1
+
+    ax = axes[axis_idx]
+    ax.hist(weeks_per_participant, bins = range(1, 12), color = "#2196F3", edgecolor = "black", alpha = 0.7)
+    ax.set_title("Measurement weeks per participant", fontsize = 11, fontweight = "bold")
+    ax.set_xlabel("# weeks")
+    ax.set_ylabel("count")
+    ax.grid(True, alpha = 0.3)
+    axis_idx += 1
+
+    for idx in range(axis_idx, len(axes)):
+        axes[idx].axis("off")
 
     plt.tight_layout()
     plt.savefig(f"{output_dir}/demographics.png", dpi = 150, bbox_inches = "tight")
-    print(f"Saved demographics plot to: {output_dir}/demographics.png")
+    print(f"Saved demographics plot to {output_dir}/demographics.png")
     plt.close()
 
 
 def draw_diurnal_profile(tensor, output_dir):
     """Draws the average diurnal profile of accelerometry descriptors.
 
-    Shows the mean activity pattern across all weeks and days, for selected descriptors:
+    Shows the mean activity pattern across all weeks and days, for the following descriptors:
     - ENMO_mean (activity level)
     - sleep proportion
     - SIB proportion (sustained inactivity bouts)
@@ -199,7 +237,7 @@ def draw_diurnal_profile(tensor, output_dir):
     descriptor_names = get_descriptor_names()
 
     # Compute mean across all weeks and participants (axis 0)
-    mean_profile = np.nanmean(tensor, axis=0)  # Shape: (168 hours, 14 descriptors)
+    mean_profile = np.nanmean(tensor, axis = 0)  # Shape: (168 hours, 14 descriptors)
 
     # Select indices for the descriptors of interest
     idx_enmo_mean = descriptor_names.index("ENMO_mean")
@@ -250,58 +288,65 @@ def draw_outcome_distributions(df, output_dir):
     """Draws distribution histograms for all prediction target variables."""
     # Select target variables
     numeric_targets = NUMERICS
-    binary_target = BINARY
+    binary_targets = BINARY
 
-    fig, axes = plt.subplots(2, 3, figsize = (15, 8))
-    axes_flat = axes.flat
+    n_targets = len(numeric_targets) + len(binary_targets)
+    ncols = 3
+    nrows = (n_targets + ncols - 1) // ncols
 
-    # Plot numeric targets
-    for i, target in enumerate(numeric_targets):
-        ax = axes_flat[i]
+    fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4), squeeze = False)
+    axes_flat = list(axes.flat)
+
+    axis_idx = 0
+
+    for target in numeric_targets:
+        ax = axes_flat[axis_idx]
         data = df[target].dropna()
-
         ax.hist(data, bins = 30, color = "#2196F3", edgecolor = "black", alpha = 0.7)
 
-        # Add mean line
         mean_val = data.mean()
-        ax.axvline(mean_val, color = "#F44336", linestyle = "--", linewidth = 2, label = f"mean = {mean_val:.1f}")
+        ax.axvline(mean_val, color = "#F44336", linestyle = "--", linewidth = 2, label = f"mean={mean_val:.1f}")
 
-        # Format title with proper naming
-        title_names = {"bdi": "BDI (depression)", "mmse": "MMSE (cognition)",
-                      "sf36": "SF-36 (HRQoL)", "chair_stand": "Chair Stand (mobility)",
-                      "sedentary": "Sedentary behaviour"}
-        ax.set_title(title_names[target], fontweight = "bold", fontsize = 11)
+        title_names = {
+            "bdi": "BDI (depression)",
+            "mmse": "MMSE (cognition)",
+            "sf36": "SF-36 (HRQoL)",
+            "chair_stand": "Chair Stand (mobility)",
+            "sedentary": "Sedentary behaviour"
+        }
+        ax.set_title(title_names.get(target, target), fontweight = "bold", fontsize = 11)
         ax.set_ylabel("weeks", fontsize = 10)
         ax.legend(fontsize = 9, loc = "upper right")
         ax.grid(True, alpha = 0.3, axis = "y")
+        axis_idx += 1
 
-    # Plot binary target (DMT2)
-    ax = axes_flat[5]
-    data_binary = df[binary_target].dropna()
-    counts = data_binary.value_counts().sort_index()
-    labels = ["No (0)", "Yes (1)"]
-    colors = ["#2196F3", "#F44336"]
+    for target in binary_targets:
+        ax = axes_flat[axis_idx]
+        data_binary = df[target].dropna()
+        counts = data_binary.value_counts().sort_index()
+        labels = ["No (0)", "Yes (1)"]
+        colors = ["#2196F3", "#F44336"]
 
-    bars = ax.bar(labels, counts.values, color = colors, edgecolor = "black", alpha = 0.7)
+        bars = ax.bar(labels[:len(counts)], counts.values, color = colors[:len(counts)], 
+                     edgecolor = "black", alpha = 0.7)
 
-    # Add count labels on bars
-    for bar, count in zip(bars, counts.values):
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-               f"{int(count)}",
-               ha = "center", # Horizontal alignment
-               va = "bottom", # Vertical alignment
-               fontsize = 10,
-               fontweight = "bold")
+        for bar, count in zip(bars, counts.values):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height, f"{int(count)}",
+                   ha = "center", va = "bottom", fontsize = 10, fontweight = "bold")
 
-    ax.set_title("Type-2 diabetes", fontweight = "bold", fontsize = 11)
-    ax.set_ylabel("weeks", fontsize = 10)
-    ax.grid(True, alpha = 0.3, axis = "y")
+        title_names = {"DMT2": "Type-2 diabetes"}
+        ax.set_title(title_names.get(target, target), fontweight = "bold", fontsize = 11)
+        ax.set_ylabel("weeks", fontsize = 10)
+        ax.grid(True, alpha = 0.3, axis = "y")
+        axis_idx += 1
 
-    fig.suptitle("", fontsize = 12, fontweight = "bold")  # Empty title for spacing
+    for idx in range(axis_idx, len(axes_flat)):
+        axes_flat[idx].axis("off")
+
     plt.tight_layout()
     plt.savefig(f"{output_dir}/outcome_distributions.png", dpi = 150, bbox_inches = "tight")
-    print(f"Saved outcome distributions plot to: {output_dir}/outcome_distributions.png")
+    print(f"Saved outcome distributions plot to {output_dir}/outcome_distributions.png")
     plt.close()
 
 
