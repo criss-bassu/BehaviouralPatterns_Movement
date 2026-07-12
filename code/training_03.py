@@ -50,17 +50,17 @@ def train_one_epoch(model, loader, optimiser, device):
     model.train() # Model in training mode
     total_loss = 0.0 # Initialize the total loss for the epoch
     for batch in loader:
-        x = batch["descriptor"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
+        d = batch["descriptor"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
         cov = batch["covariate"].to(device) # Vector of clinical covariates (sample, covariates)
-        y = batch["target"].to(device) # Real clinical targets (sample, targets)
+        target = batch["target"].to(device) # Real clinical targets (sample, targets)
         mask = batch["mask"].to(device) # Mask indicating which clinical targets exist
 
         # Restarts the gradients (saved by default)
         optimiser.zero_grad()
         # Forward pass: model predicts the outcomes based on the input data
-        outputs = model(x, cov)
+        outputs = model(d, cov)
         # Calculates the loss for each task and the total loss (used for training)
-        loss, losses = multitask_loss(outputs, y, mask)
+        loss, losses = multitask_loss(outputs, target, mask)
         # Calculates the gradients (how much the weight should change to reduce the loss) through backpropagation
         loss.backward()
         # Prevents exploding gradients by scaling down the gradients if their norm > 1.0
@@ -71,8 +71,8 @@ def train_one_epoch(model, loader, optimiser, device):
         optimiser.step() # Learning step
         
         # loss.item() = scalar value of the loss tensor
-        # x.size(0) = number of samples in the batch
-        total_loss += loss.item() * x.size(0) # Accumulates the total loss for the epoch
+        # d.size(0) = number of samples in the batch
+        total_loss += loss.item() * d.size(0) # Accumulates the total loss for the epoch
 
     return total_loss / len(loader.dataset) # Mean loss of the total trainning set (for 1 epoch)
 
@@ -84,14 +84,14 @@ def evaluate_loss(model, loader, device):
     model.eval()
     total_loss = 0.0
     for batch in loader:
-        x = batch["descriptor"].to(device)
+        d = batch["descriptor"].to(device)
         cov = batch["covariate"].to(device)
-        y = batch["target"].to(device)
+        target = batch["target"].to(device)
         mask = batch["mask"].to(device)
 
-        outputs = model(x, cov)
-        loss, losses = multitask_loss(outputs, y, mask)
-        total_loss += loss.item() * x.size(0)
+        outputs = model(d, cov)
+        loss, losses = multitask_loss(outputs, target, mask)
+        total_loss += loss.item() * d.size(0)
 
     return total_loss / len(loader.dataset)
 
@@ -101,7 +101,7 @@ def fit_model(model, train_data, val_data, device,
               lr = 1e-3, weight_decay = 1e-4, max_epochs = 100, patience = 10, warmup_epochs = 5):
     model = model.to(device)
     optimiser = torch.optim.Adam(
-        model.parameters(), # trainable parameters of the model
+        model.parameters(), # trainable parameters of the model (weights and biases)
         lr = lr, # learning rate
         weight_decay = weight_decay # L2 regularization -> prevents overfitting
     )
@@ -110,7 +110,7 @@ def fit_model(model, train_data, val_data, device,
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimiser,
         start_factor = 0.1, # lr is just 10% of its original value during
-        end_factor = 1.0,
+        end_factor = 1.0, # lr reaches its original value after the warmup phase
         total_iters = warmup_epochs # the first "warmup_epochs" epochs
     )
     # Linear scheduler that reduces the learning rate if the metric stops improving

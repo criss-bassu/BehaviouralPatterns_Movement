@@ -190,8 +190,8 @@ def run_model(model_name, hp, data, device):
                 test_preds, # DataFrame with predictions, real values and masks for each task
                 task, # The target variable to evaluate
                 metric, # The main metric to compute for the target variable
-                target_mean = data["target_mean"], # Mean of the target variable in the training set (used for scaling back to original units)
-                target_std = data["target_std"], # Standard deviation of the target variable in the training set (used for scaling back to original units)
+                target_mean = data["target_mean"], # Mean of the target variable in the training set (for scaling back to original units)
+                target_std = data["target_std"], # Standard deviation of the target variable in the training set (for scaling back to original units)
                 n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
                 seed = 9626, # Random seed for reproducibility of the bootstrap results
             )

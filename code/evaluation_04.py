@@ -75,9 +75,9 @@ def collect_predictions(model, loader, device):
     model.eval()
     rows = [] # Initialize a list to store the rows of the DataFrame
     for batch in loader:
-        x = batch["descriptor"].to(device)
+        d = batch["descriptor"].to(device)
         cov = batch["covariate"].to(device)
-        outputs = model(x, cov) # Forward pass: model predicts the outcomes based on the input data
+        outputs = model(d, cov) # Forward pass: model predicts the outcomes based on the input data
 
         # Convert the outputs to numpy arrays for easier manipulation (for each target to predict)
         out_np = {task: outputs[task].cpu().numpy() for task in TARGET_COLS}
@@ -125,7 +125,6 @@ def participant_bootstrap(df, task, metric_name, target_mean, target_std, n_boot
     """Bootstrap by participant, not week. Returns mean and 95% CI."""
     # Use a random number generator with a fixed seed for reproducibility
     rng = np.random.default_rng(seed)
-    # Pre-agrupar una sola vez para evitar filtrado O(N) en cada iteración
     # Group the DataFrame by participant_id to create a dictionary
         # keys = participant IDs
         # values = DataFrames with the rows for that participant

@@ -98,10 +98,10 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     verify_no_leakage(df)
 
     # Get the indices of the training samples
-    train_idx = df.index[df["split"] == "train"].to_numpy()
+    train_idxs = df.index[df["split"] == "train"].to_numpy()
 
     # Flatten the accelerometry tensor to NORMALISE it (mean/std of the training dataset)
-    descriptors_train_flat = descriptors[train_idx].reshape(-1, descriptors.shape[-1])
+    descriptors_train_flat = descriptors[train_idxs].reshape(-1, descriptors.shape[-1])
     # Compute the mean of each descriptor
     descriptors_mean = np.nanmean(descriptors_train_flat, axis = 0)
     # Compute the standard deviation of each descriptor
@@ -119,21 +119,21 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     )
 
     # NORMALISE clinical covariants (if used)
-    cov = normalize_covariables(df, train_idx)
+    cov = normalize_covariables(df, train_idxs)
 
     # MASKS and NORMALISATION of predictive outcomes
-    target_raw = df[TARGET_COLS].to_numpy(dtype = "float32") # DMT2, sf36, sedentary, bdi, mmse, chair_stand
+    targets_raw = df[TARGET_COLS].to_numpy(dtype = "float32") # DMT2, sf36, sedentary, bdi, mmse, chair_stand
     # Whether the targets are valid (1) or missing (0)
     mask = (~df[TARGET_COLS].isna()).to_numpy(dtype = "float32")
     # Normalise the numeric targets using the mean and standard deviation of the training set
-    target_mean, target_std, numeric_targets_standardised = normalize_numeric_targets(target_raw, mask, train_idx)
+    targets_mean, targets_std, targets_standardised = normalize_targets(targets_raw, mask, train_idxs)
 
     # Build DataLoaders
     # Augment = True just in train split
     make_ds = lambda split, augment = False: WeeklyAccelerometryDataset(
         descriptors_scaled,
         cov,
-        numeric_targets_standardised,
+        targets_standardised,
         mask,
         df,
         split,
@@ -165,8 +165,8 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
         "d": descriptors_scaled.shape[-1], # Number of descriptors
         "hours": descriptors_scaled.shape[1], # Number of hours
         "cov_dim": cov.shape[-1], # Dimensionality of clinical covariates
-        "target_mean": target_mean, # Mean of the targets in the training set
-        "target_std": target_std, # Standard deviation of the targets in the training set
+        "target_mean": targets_mean, # Mean of the targets in the training set
+        "target_std": targets_std, # Standard deviation of the targets in the training set
     }
 
 
@@ -181,7 +181,7 @@ def verify_no_leakage(df):
     # Check that the participants in "validation" are not in "test"
     assert splits["validation"].isdisjoint(splits["test"])
 
-def normalize_covariables(df, train_idx):
+def normalize_covariables(df, train_idxs):
     missing  = [c for c in COVARIABLES if c not in df.columns]
 
     if missing:
@@ -191,7 +191,7 @@ def normalize_covariables(df, train_idx):
         return np.zeros((len(df), 0), dtype = "float32")
     
     # Get the clinical covariates of the training samples
-    cov_train = df.loc[train_idx, COVARIABLES]
+    cov_train = df.loc[train_idxs, COVARIABLES]
     # Compute the mean of each clinical covariate in the training set
     cov_mean  = cov_train.mean()
     # Compute the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
@@ -205,27 +205,27 @@ def normalize_covariables(df, train_idx):
 
 
 # Standarizes the numeric targets using statistics from the training set. Binary targets are not scaled.
-def normalize_numeric_targets(target_raw, mask, train_idx):
+def normalize_targets(targets_raw, mask, train_idxs):
     # Mean array of the targets initally set to 0
-    target_mean = np.zeros(len(TARGET_COLS), dtype = "float32")
+    targets_mean = np.zeros(len(TARGET_COLS), dtype = "float32")
     # Standard deviation array of the targets initally set to 1
-    target_std  = np.ones(len(TARGET_COLS),  dtype = "float32")
+    targets_std  = np.ones(len(TARGET_COLS),  dtype = "float32")
     for i, col in enumerate(TARGET_COLS):
         # We don't want to standardize the binary targets
         if col in BINARY:
             continue
         # Get the valid values of the target in the training set (mask == 1)
-        valid_target = target_raw[train_idx, i][mask[train_idx, i] == 1]
+        valid_target = targets_raw[train_idxs, i][mask[train_idxs, i] == 1]
         if len(valid_target) > 0:
             # Mean of the target's valid values
-            target_mean[i] = valid_target.mean()
+            targets_mean[i] = valid_target.mean()
             # Standard deviation of the target's valid values
-            target_std[i]  = valid_target.std() if valid_target.std() > 0 else 1.0
+            targets_std[i]  = valid_target.std() if valid_target.std() > 0 else 1.0
     # Create a copy of the target values to avoid modifying the original data
-    targets = target_raw.copy()
+    targets = targets_raw.copy()
     # Standardize the numeric targets using the mean and standard deviation of the training set
     for i, col in enumerate(TARGET_COLS):
         if col not in BINARY:
-            targets[:, i] = (target_raw[:, i] - target_mean[i]) / target_std[i]
+            targets[:, i] = (targets_raw[:, i] - targets_mean[i]) / targets_std[i]
     # return the mean and standard deviation of the targets, and the standardized targets with NaN replaced by 0
-    return target_mean, target_std, np.nan_to_num(targets, nan = 0.0).astype("float32")
+    return targets_mean, targets_std, np.nan_to_num(targets, nan = 0.0).astype("float32")
