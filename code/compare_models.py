@@ -405,7 +405,7 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    output_dir = OUTPUT_DIR + "/comparison"
+    output_dir = OUTPUT_DIR
     # Create the output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok = True) # exist_ok = True -> If the directory already exists, do not raise an error
     print(f"Device: {device}")

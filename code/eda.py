@@ -210,11 +210,37 @@ def draw_demographics(df, output_dir):
             axis_idx += 1
 
     ax = axes[axis_idx]
-    ax.hist(weeks_per_participant, bins = range(1, 12), color = "#2196F3", edgecolor = "black", alpha = 0.7)
-    ax.set_title("Measurement weeks per participant", fontsize = 11, fontweight = "bold")
-    ax.set_xlabel("# weeks")
-    ax.set_ylabel("count")
-    ax.grid(True, alpha = 0.3)
+
+    # Count how many participants provided each number of weeks
+    week_counts = weeks_per_participant.value_counts().sort_index()
+
+    bars = ax.bar(
+        week_counts.index,
+        week_counts.values,
+        color = "#2196F3",
+        edgecolor = "black",
+        alpha = 0.7
+    )
+
+    # Add the number of participants above each bar
+    ax.bar_label(
+        bars,
+        labels = [str(count) for count in week_counts.values],
+        padding = 3,
+        fontsize = 9,
+        fontweight = "bold"
+    )
+
+    ax.set_title(
+        "Number of participants by measurement weeks",
+        fontsize = 11,
+        fontweight = "bold"
+    )
+    ax.set_xlabel("Number of weeks per participant")
+    ax.set_ylabel("Number of participants")
+    ax.set_xticks(week_counts.index)
+    ax.grid(True, axis = "y", alpha = 0.3)
+
     axis_idx += 1
 
     for idx in range(axis_idx, len(axes)):
@@ -369,7 +395,7 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     # Create output directory
-    output_dir = OUTPUT_DIR + "/eda"
+    output_dir = OUTPUT_DIR
     os.makedirs(output_dir, exist_ok = True)
 
     print(f"Output directory: {output_dir}")
