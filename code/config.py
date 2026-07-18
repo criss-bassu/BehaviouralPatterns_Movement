@@ -14,10 +14,10 @@ COVARIABLES = []
 
 
 # Accelerometry tensor file path (Participants, hours, variables)
-TENSOR_PATH = "../data/tensor_X.npy"
-PARQUET_PATH = "../data/dfParticipants.parquet"
+TENSOR_PATH = "../data/tensor_X-1.npy"
+PARQUET_PATH = "../data/dfParticipants-1.parquet"
 # Output directory for results
-OUTPUT_DIR = "../results" + "/comparison"
+OUTPUT_DIR = "../results" + "/comparison-1Week"
 
 SEED = 9626
 

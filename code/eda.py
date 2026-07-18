@@ -258,7 +258,6 @@ def draw_diurnal_profile(tensor, output_dir):
     Shows the mean activity pattern across all weeks and days, for the following descriptors:
     - ENMO_mean (activity level)
     - sleep proportion
-    - SIB proportion (sustained inactivity bouts)
     """
     descriptor_names = get_descriptor_names()
 
@@ -268,14 +267,12 @@ def draw_diurnal_profile(tensor, output_dir):
     # Select indices for the descriptors of interest
     idx_enmo_mean = descriptor_names.index("ENMO_mean")
     idx_sleep = descriptor_names.index("sleep")
-    idx_sib = descriptor_names.index("SIB")
 
     # Compute hourly averages
     hours_of_day = np.arange(24)
     # Average each hour (168 hours / 7 days = 24 hours per day)
     enmo_hourly = np.array([mean_profile[h::24, idx_enmo_mean].mean() for h in range(24)])
     sleep_hourly = np.array([mean_profile[h::24, idx_sleep].mean() for h in range(24)])
-    sib_hourly = np.array([mean_profile[h::24, idx_sib].mean() for h in range(24)])
 
     fig, ax = plt.subplots(figsize = (12, 5))
 
@@ -284,14 +281,12 @@ def draw_diurnal_profile(tensor, output_dir):
     ax.plot(hours_of_day, enmo_hourly, marker = "o", color = color_enmo, linewidth = 2, label = "ENMO_mean (activity)")
     ax.set_xlabel("Hour of day", fontsize = 11)
     ax.set_ylabel("Mean ENMO (g)", fontsize = 11, color = color_enmo)
-    ax.tick_params(axis="y", labelcolor=color_enmo)
+    ax.tick_params(axis = "y", labelcolor = color_enmo)
 
     # Secondary axis: Sleep and SIB proportions
     ax2 = ax.twinx()
     color_sleep = "#9C27B0"
-    color_sib = "#FF9800"
     ax2.plot(hours_of_day, sleep_hourly, marker = "s", color = color_sleep, linewidth = 2, label = "sleep proportion")
-    ax2.plot(hours_of_day, sib_hourly, marker = "^", color = color_sib, linewidth = 2, label = "SIB proportion")
     ax2.set_ylabel("Proportion of hour", fontsize = 11)
     ax2.set_ylim([0, 0.85])
 
