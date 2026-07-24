@@ -52,24 +52,24 @@ def build_encoder(model_name, data, hp):
             d = data["d"],
             hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
-            rep_dim = hp["rep_dim"],
-            dropout = hp["dropout"],
+            rep_dim = hp["rep_dim"], # Encoder output size
+            dropout = hp["dropout"]
         )
     if model_name == "CNN":
         return CNNEncoder(
             d = data["d"],
             channels = hp["channels"],
-            rep_dim = hp["rep_dim"],
+            rep_dim = hp["rep_dim"], # Encoder output size
             dropout = hp["dropout"],
-            kernel_size = hp["kernel_size"],
+            kernel_size = hp["kernel_size"]
         )
     if model_name == "GRU":
         return GRUEncoder(
             d = data["d"],
             hidden_dim = hp["hidden_dim"],
-            rep_dim = hp["rep_dim"],
+            rep_dim = hp["rep_dim"], # Encoder output size
             num_layers = hp["num_layers"],
-            dropout = hp["dropout"],
+            dropout = hp["dropout"]
         )
     raise ValueError(f"Model {model_name} not recognized")
 
@@ -80,7 +80,7 @@ def build_model(model_name, data, hp):
     return WeeklyOutcomeModel(
         encoder = encoder,
         tasks = TARGET_COLS,
-        rep_dim = hp["rep_dim"],
+        rep_dim = hp["rep_dim"], # Expected head input size = encoder output size
         cov_dim = data["cov_dim"],
         head_hidden = hp["head_hidden"],
         head_dropout = hp["head_dropout"]
@@ -100,12 +100,12 @@ def fit_with_hp(model_name, data, device, hp, training):
         weight_decay = hp["weight_decay"], # L2 regularization -> prevents overfitting by penalizing large weights
         max_epochs = training["max_epochs"], # maximum number of epochs to train the model
         patience = training["patience"], # Early stopping -> Prevents overfitting when the validation loss stops improving for a number of epochs
-        warmup_epochs = training["warmup_epochs"],
+        warmup_epochs = training["warmup_epochs"]
     )
     return model, history_df
 
 
-def coerce_grid_value(value, grid_values):
+def convert_grid_value_type(value, grid_values):
     """Converts the type of the value to the type of the first element in grid_values."""
     template = grid_values[0]
     # Checks if the template is an integer and not a boolean (booleans are subclasses of integers in Python)
@@ -162,7 +162,7 @@ def grid_search_model(model_name, spec, data, device, output_dir):
 
     # Changes the best hyperparameter values' type to the correct original type
     # Pandas sometimes changes the types when creating a DataFrame
-    best_values = {key: coerce_grid_value(table.iloc[0][key], grid[key]) for key in keys}
+    best_values = {key: convert_grid_value_type(table.iloc[0][key], grid[key]) for key in keys}
     # Merges the base hyperparameters with the best hyperparameter values found during the grid search
     best_hp = {**spec["base_hp"], **best_values} # Dictionary with the best hyperparameters for the model
     return best_hp, table
