@@ -46,13 +46,13 @@ def multitask_loss(predicted_outcomes, real_outcomes, mask, task_weights = None)
 
 
 # 1 epoch has B batches, each batch has N samples
-def train_one_epoch(model, loader, optimiser, device):
+def train_one_epoch(model, train_data, optimiser, device):
     model.train() # Model in training mode
     total_loss = 0.0 # Initialize the total loss for the epoch
-    for batch in loader:
+    for batch in train_data:
         d = batch["descriptor"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
         cov = batch["covariate"].to(device) # Vector of clinical covariates (sample, covariates)
-        target = batch["target"].to(device) # Real clinical targets (sample, targets)
+        targets = batch["target"].to(device) # Real clinical targets (sample, targets)
         mask = batch["mask"].to(device) # Mask indicating which clinical targets exist
 
         # Restarts the gradients (saved by default)
@@ -60,11 +60,11 @@ def train_one_epoch(model, loader, optimiser, device):
         # Forward pass: model predicts the outcomes based on the input data
         outputs = model(d, cov)
         # Calculates the loss for each task and the total loss (used for training)
-        loss, losses = multitask_loss(outputs, target, mask)
+        loss, losses = multitask_loss(outputs, targets, mask)
         # Calculates the gradients (how much the weight should change to reduce the loss) through backpropagation
         loss.backward()
         # Prevents exploding gradients by scaling down the gradients if their norm > 1.0
-        # clip_grad_norm_ is a function that modifies the gradients of the model's parameters in-place
+        # clip_grad_norm_ is modifies the gradients of the model's parameters in-place
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0) # Gradient Clipping
         # Updates the model's parameters based on the gradients:
         # Updates the weights (using Adam's optimizer)
@@ -74,26 +74,26 @@ def train_one_epoch(model, loader, optimiser, device):
         # d.size(0) = number of samples in the batch
         total_loss += loss.item() * d.size(0) # Accumulates the total loss for the epoch
 
-    return total_loss / len(loader.dataset) # Mean loss of the total trainning set (for 1 epoch)
+    return total_loss / len(train_data.dataset) # Mean loss of the total trainning set (for 1 epoch)
 
 
 # # Disables gradient calculation
 @torch.no_grad() # Gradients only needed during training
-def evaluate_loss(model, loader, device):
+def evaluate_loss(model, val_data, device):
     # Similar to train_one_epoch, but without backpropagation and weight updates
     model.eval()
     total_loss = 0.0
-    for batch in loader:
+    for batch in val_data:
         d = batch["descriptor"].to(device)
         cov = batch["covariate"].to(device)
-        target = batch["target"].to(device)
+        targets = batch["target"].to(device)
         mask = batch["mask"].to(device)
 
         outputs = model(d, cov)
-        loss, losses = multitask_loss(outputs, target, mask)
+        loss, losses = multitask_loss(outputs, targets, mask)
         total_loss += loss.item() * d.size(0)
 
-    return total_loss / len(loader.dataset)
+    return total_loss / len(val_data.dataset)
 
 
 # Main training function

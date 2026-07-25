@@ -36,7 +36,7 @@ def binary_classification_metrics(real_target, logits, threshold = 0.5):
         "sensitivity": tp / (tp + fn) if (tp + fn) > 0 else np.nan,
         # True Negative Rate: True negatives / (True negatives + False positives)
         # Of all the real negative cases, how many did we correctly predict as negative?
-        "specificity": tn / (tn + fp) if (tn + fp) > 0 else np.nan,
+        "specificity": tn / (tn + fp) if (tn + fp) > 0 else np.nan
     }
 
 
@@ -46,7 +46,7 @@ def regression_metrics(real_target, pred_target):
         # r = 0 -> no correlation
         # r = 1 -> perfect positive correlation
         # r = -1 -> perfect negative correlation
-    r = (pearsonr(real_target, pred_target)[0]
+    r = (pearsonr(real_target, pred_target)[0] # Returns the correlation coefficient (r) and p-value, but we only need r
          # There must be at least 2 unique values in the target to predict
          # The value of the real and predictive target can't be constant
          # Otherwise the correlation is undefined
@@ -65,16 +65,16 @@ def regression_metrics(real_target, pred_target):
             # R^2 = 1 -> perfect prediction
             # R^2 = 0 -> model predicts the mean of the target variable
             # R^2 < 0 -> model performs worse than predicting the mean of the target
-        "r2": r2_score(real_target, pred_target),
+        "r2": r2_score(real_target, pred_target)
     }
 
 
 @torch.no_grad()
-def collect_predictions(model, loader, device):
+def collect_predictions(model, test_data, device):
     """Returns a DataFrame with predictions, real values and masks, for each task."""
     model.eval()
     rows = [] # Initialize a list to store the rows of the DataFrame
-    for batch in loader:
+    for batch in test_data:
         d = batch["descriptor"].to(device)
         cov = batch["covariate"].to(device)
         outputs = model(d, cov) # Forward pass: model predicts the outcomes based on the input data
