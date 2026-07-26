@@ -59,9 +59,8 @@ class WeeklyAccelerometryDataset(Dataset):
         }
 
 
-# Loads, partitions and normalizes the data
-# Returns loaders and scalers
 def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size_train = 64, batch_size_eval = 128, random_state = 9626):
+    """Loads, partitions and normalizes the data. Returns loaders and scalers."""
     # Load the data
     descriptors = np.load(descriptors_path)
     df = pd.read_parquet(df_path)
@@ -101,8 +100,12 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     train_idxs = df.index[df["split"] == "train"].to_numpy()
 
     # Flatten the accelerometry tensor to NORMALISE it (mean/std of the training dataset)
+        # .reshape(-1, descriptors.shape[-1]) = Flattens the tensor to a 2D array
+        # -1 = calculates the total number of rows
+        # descriptors.shape[-1] = number of descriptors (columns)
     descriptors_train_flat = descriptors[train_idxs].reshape(-1, descriptors.shape[-1])
     # Compute the mean of each descriptor
+    # axis = 0 -> computes the mean for each descriptor (ignoring NaN values)
     descriptors_mean = np.nanmean(descriptors_train_flat, axis = 0)
     # Compute the standard deviation of each descriptor
     # If the standard deviation is 0, we replace it with 1 to avoid division by zero
@@ -122,7 +125,7 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     cov = normalize_covariables(df, train_idxs)
 
     # MASKS and NORMALISATION of predictive outcomes
-    targets_raw = df[TARGET_COLS].to_numpy(dtype = "float32") # DMT2, sf36, sedentary, bdi, mmse, chair_stand
+    targets_raw = df[TARGET_COLS].to_numpy(dtype = "float32")
     # Whether the targets are valid (1) or missing (0)
     mask = (~df[TARGET_COLS].isna()).to_numpy(dtype = "float32")
     # Normalise the numeric targets using the mean and standard deviation of the training set
@@ -170,8 +173,8 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     }
 
 
-# Checks that no participant appears in more than one split
 def verify_no_leakage(df):
+    """Checks that no participant appears in more than one split"""
     # Get the set of participants in each split
     splits = {s: set(g["participant_id"]) for s, g in df.groupby("split")}
     # Check that the participants in "train" are not in "validation"
@@ -204,12 +207,12 @@ def normalize_covariables(df, train_idxs):
     return cov
 
 
-# Standarizes the numeric targets using statistics from the training set. Binary targets are not scaled.
 def normalize_targets(targets_raw, mask, train_idxs):
+    """Standarizes the numeric targets using statistics from the training set. Binary targets are not scaled."""
     # Mean array of the targets initally set to 0
     targets_mean = np.zeros(len(TARGET_COLS), dtype = "float32")
     # Standard deviation array of the targets initally set to 1
-    targets_std  = np.ones(len(TARGET_COLS),  dtype = "float32")
+    targets_std = np.ones(len(TARGET_COLS), dtype = "float32")
     for i, col in enumerate(TARGET_COLS):
         # We don't want to standardize the binary targets
         if col in BINARY:
