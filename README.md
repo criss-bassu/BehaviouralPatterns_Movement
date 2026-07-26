@@ -47,7 +47,7 @@ Contains the machine learning pipeline, organised by stage:
 ### `results/`
 Directory automatically created to store all analysis outputs:
 
-#### `results/eda/`
+#### `results/eda-1Week/`
 Exploratory data analysis outputs:
 
 - **table_descriptors_statistics.csv**: Hourly accelerometry descriptors with mean, standard deviation, minimum, and maximum values computed across all weeks.
@@ -62,7 +62,7 @@ Exploratory data analysis outputs:
 
 - **outcome_distributions.png**: Histograms for the prediction targets. Includes mean lines for continuous variables and count labels for the binary outcome.
 
-#### `results/comparison/`
+#### `results/comparison-1Week/`
 Model comparison and benchmarking outputs:
 
 - **grid_search_*.csv**: One file per architecture (MLP, CNN, GRU) logging all hyperparameter combinations tested, validation loss, optimal epoch, and early stopping epoch.
