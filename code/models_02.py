@@ -17,7 +17,7 @@ class MLPEncoder(nn.Module):
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, rep_dim), # Final linear layer. Produces the representation. (hidden_dim -> rep_dim)
-            nn.ReLU(),
+            nn.ReLU()
         )
 
     # x = (batch_size, hours, d)
@@ -43,13 +43,13 @@ class CNNEncoder(nn.Module):
             nn.ReLU(),
             nn.BatchNorm1d(channels),
             # Converts a time sequence into one summary vector per sample (global average pooling)
-            nn.AdaptiveAvgPool1d(1),
+            nn.AdaptiveAvgPool1d(1)
         )
         # Converts the convolutional summary into the final representation size: (batch_size, channels, 1) -> (batch_size, channels)
         self.proj = nn.Sequential(
             nn.Flatten(),
             nn.Linear(channels, rep_dim), # Produces the representation: (batch_size, channels) -> (batch_size, rep_dim)
-            nn.ReLU(),
+            nn.ReLU()
         )
 
     # x = (batch_size, hours, d)
@@ -68,12 +68,12 @@ class GRUEncoder(nn.Module):
             hidden_size = hidden_dim,
             num_layers = num_layers,
             batch_first = True, # The input tensor has a initial batch size: (batch_size, hours, d)
-            dropout = dropout if num_layers > 1 else 0.0, # If there is only one layer, dropout inside the GRU won't be meaningful
+            dropout = dropout if num_layers > 1 else 0.0 # If there is only one layer, dropout inside the GRU won't be meaningful
         )
         # Converts the GRU output into the final representation size
         self.proj = nn.Sequential(
             nn.Linear(hidden_dim, rep_dim), # (batch_size, hidden_dim) -> (batch_size, rep_dim)
-            nn.ReLU(),
+            nn.ReLU()
         )
 
     # x = (batch_size, hours, d)
@@ -94,7 +94,7 @@ class MultiTaskHead(nn.Module):
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim), # (batch_size, rep_dim + cov_dim) -> (batch_size, hidden_dim)
             nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Dropout(dropout)
         )
         # A linear head for each task, dynamically built from the list of tasks (binary + numeric)
         # Order is preserved
