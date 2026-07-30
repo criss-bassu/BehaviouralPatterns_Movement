@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
 
-from config import BINARY, COVARIABLES, NUMERICS, OUTPUT_DIR, PARQUET_PATH, TENSOR_PATH, SEED
+from config import BINARY, COVARIABLES, NUMERICS, OUTPUT_DIR_EDA, PARQUET_PATH, TENSOR_PATH, SEED
 
 
 def set_seed(seed = SEED):
@@ -32,13 +32,13 @@ def compute_descriptors_statistics(tensor):
     """Computes summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
     descriptor_names = get_descriptor_names()
 
-    # Flatten the tensor to compute statistics across all weeks and hours
+    # Flatten the tensor
     tensor_flat = tensor.reshape(-1, tensor.shape[-1])
 
     stats = []
     for i, desc_name in enumerate(descriptor_names):
         data = tensor_flat[:, i] # Select the descriptor column
-        # Remove NaN values for statistics computation
+        # Remove NaN values
         data_clean = data[~np.isnan(data)]
 
         stats.append({
@@ -165,7 +165,7 @@ def draw_demographics(df, output_dir):
         nrows = 2
     else:
         ncols = 3
-        nrows = (n_plots + 2) // 3
+        nrows = (n_plots + 2) // 3 # Determines the number of rows needed
 
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4))
     
@@ -215,8 +215,8 @@ def draw_demographics(df, output_dir):
     week_counts = weeks_per_participant.value_counts().sort_index()
 
     bars = ax.bar(
-        week_counts.index,
-        week_counts.values,
+        week_counts.index,  # Number of weeks
+        week_counts.values, # Number of participants
         color = "#2196F3",
         edgecolor = "black",
         alpha = 0.7
@@ -225,7 +225,7 @@ def draw_demographics(df, output_dir):
     # Add the number of participants above each bar
     ax.bar_label(
         bars,
-        labels = [str(count) for count in week_counts.values],
+        labels = [str(count) for count in week_counts.values], # Convert counts to strings
         padding = 3,
         fontsize = 9,
         fontweight = "bold"
@@ -283,7 +283,7 @@ def draw_diurnal_profile(tensor, output_dir):
     ax.set_ylabel("Mean ENMO (g)", fontsize = 11, color = color_enmo)
     ax.tick_params(axis = "y", labelcolor = color_enmo)
 
-    # Secondary axis: Sleep and SIB proportions
+    # Secondary axis: Sleep proportion
     ax2 = ax.twinx()
     color_sleep = "#9C27B0"
     ax2.plot(hours_of_day, sleep_hourly, marker = "s", color = color_sleep, linewidth = 2, label = "sleep proportion")
@@ -291,8 +291,8 @@ def draw_diurnal_profile(tensor, output_dir):
     ax2.set_ylim([0, 0.85])
 
     # Combine legends
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
+    lines1, labels1 = ax.get_legend_handles_labels() # Primary axis
+    lines2, labels2 = ax2.get_legend_handles_labels() # Secondary axis
     ax.legend(lines1 + lines2, labels1 + labels2, loc = "upper right", fontsize = 10)
 
     ax.set_title("Average diurnal profile (over all weeks and days)", fontsize = 12, fontweight = "bold")
@@ -313,7 +313,7 @@ def draw_outcome_distributions(df, output_dir):
 
     n_targets = len(numeric_targets) + len(binary_targets)
     ncols = 3
-    nrows = (n_targets + ncols - 1) // ncols
+    nrows = (n_targets + ncols - 1) // ncols # Determines the number of rows needed
 
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 4.7, nrows * 4), squeeze = False)
     axes_flat = list(axes.flat)
@@ -375,13 +375,13 @@ def format_statistics_tables(descriptor_stats, covariates_stats):
     """Print formatted statistics tables to console."""
     print("\n" + "=" * 80)
     print("DESCRIPTORS STATISTICS")
-    print("="*80)
-    print(descriptor_stats.to_string(index=False))
+    print("=" * 80)
+    print(descriptor_stats.to_string(index = False))
 
     print("\n" + "=" * 80)
     print("COVARIATES AND TARGETS STATISTICS")
     print("=" * 80)
-    print(covariates_stats.to_string(index=False))
+    print(covariates_stats.to_string(index = False))
 
 
 def main():
@@ -390,7 +390,7 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     # Create output directory
-    output_dir = OUTPUT_DIR
+    output_dir = OUTPUT_DIR_EDA
     os.makedirs(output_dir, exist_ok = True)
 
     print(f"Output directory: {output_dir}")

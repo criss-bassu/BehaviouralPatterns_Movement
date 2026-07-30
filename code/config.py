@@ -17,7 +17,8 @@ COVARIABLES = []
 TENSOR_PATH = "../data/tensor_X-1.npy"
 PARQUET_PATH = "../data/dfParticipants-1.parquet"
 # Output directory for results
-OUTPUT_DIR = "../results" + "/comparison-1Week"
+OUTPUT_DIR = "../results" + "/Test"
+OUTPUT_DIR_EDA = "../results" + "/Test_EDA"
 
 SEED = 9626
 
@@ -46,7 +47,7 @@ BASE_HP = {
 MODEL_SPECS = {
     "MLP": {
         # use_grid_search = False -> Uses base_hp and doesn't grid search
-        "use_grid_search": True, # Tries all combinations in the grid
+        "use_grid_search": False, # Tries all combinations in the grid
         # Fixed or final values chosen
         "base_hp": {
             **BASE_HP,
@@ -64,7 +65,7 @@ MODEL_SPECS = {
         }
     },
     "CNN": {
-        "use_grid_search": True,
+        "use_grid_search": False,
         "base_hp": {
             **BASE_HP,
             "channels": 128,
@@ -81,7 +82,7 @@ MODEL_SPECS = {
         }
     },
     "GRU": {
-        "use_grid_search": True,
+        "use_grid_search": False,
         "base_hp": {
             **BASE_HP,
             "hidden_dim": 64,
