@@ -83,7 +83,7 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
         temp_p,
         test_size = 0.50, # 30% in validation (15%) and testing (15%)
         random_state = random_state,
-        stratify = participant_strat.loc[temp_p] if participant_strat is not None else None,
+        stratify = participant_strat.loc[temp_p] if participant_strat is not None else None
     )
 
     # Initially, all participants are marked as "trained"

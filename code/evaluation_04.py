@@ -121,14 +121,14 @@ def compute_task_metric(df, task, metric_name, target_mean, target_std):
     return regression_metrics(real_target, pred_target)[metric_name]
 
 
-def participant_bootstrap(df, task, metric_name, target_mean, target_std, n_boot = 1000, seed = 9626):
+def participant_bootstrap(test_preds, task, metric_name, target_mean, target_std, n_boot = 1000, seed = 9626):
     """Bootstrap by participant, not week. Returns mean and 95% CI."""
     # Use a random number generator with a fixed seed for reproducibility
     rng = np.random.default_rng(seed)
     # Group the DataFrame by participant_id to create a dictionary
         # keys = participant IDs
         # values = DataFrames with the rows for that participant
-    groups = {idx: grp for idx, grp in df.groupby("participant_id")}
+    groups = {idx: grp for idx, grp in test_preds.groupby("participant_id")}
     # List of unique participant IDs
     participants = np.array(list(groups.keys()))
 

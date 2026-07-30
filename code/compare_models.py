@@ -193,7 +193,7 @@ def run_model(model_name, hp, data, device):
                 target_mean = data["target_mean"], # Mean of the target variable in the training set (for scaling back to original units)
                 target_std = data["target_std"], # Standard deviation of the target variable in the training set (for scaling back to original units)
                 n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
-                seed = 9626, # Random seed for reproducibility of the bootstrap results
+                seed = 9626 # Random seed for reproducibility of the bootstrap results
             )
             # Store values of the metric for the current task in the dictionary
             results[task] = {
@@ -281,14 +281,14 @@ def draw_loss_curves(histories, output_dir):
     # Iterate through each axis and each model's corresponding training history
     for ax, (model_name, df) in zip(axes, histories.items()):
         # Draw the training loss curves for the current model
-        ax.plot(df["epoch"], df["train_loss"], color = "#2196F3", lw = 2, label = "Train")
+        ax.plot(df["epoch"], df["train_loss"], color = "#0000FF", lw = 2, label = "Train")
         # Draw the validation loss curves for the current model
-        ax.plot(df["epoch"], df["val_loss"], color = "#F44336", lw = 2, label = "Val")
+        ax.plot(df["epoch"], df["val_loss"], color = "#FF0000", lw = 2, label = "Val")
         # Highlight the epoch with the best validation loss (lowest value)
         best = df.loc[df["val_loss"].idxmin()]
         # Draw a vertical dashed line at the epoch with the best validation loss and mark it with a red dot
         ax.axvline(best["epoch"], color = "gray", linestyle = "--", lw = 1, alpha = 0.7)
-        ax.scatter([best["epoch"]], [best["val_loss"]], color = "#F44336", zorder = 5, s = 50)
+        ax.scatter([best["epoch"]], [best["val_loss"]], color = "#FF0000", zorder = 5, s = 50)
         # Set the title, labels, legend, and grid for the current subplot
         ax.set_title(f"{model_name} (epoch {int(best['epoch'])}, val = {best['val_loss']:.2f})", fontsize = 11, fontweight = "bold")
         ax.set_xlabel("Epoch") # Set the x-axis label to "Epoch"
@@ -305,7 +305,7 @@ def draw_loss_curves(histories, output_dir):
 def draw_metrics_comparison(all_results, output_dir):
     """Draws a bar plot comparing the main metric for each model and task"""
     # Define a color for each model
-    model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
+    model_colors = {"MLP": "#FFCC80", "CNN": "#90CAF9", "GRU": "#A5D6A7"}
     # Calculate the number of rows and columns needed for the grid of subplots, with a maximum of 3 columns
     nrows, ncols = grid(len(TARGET_COLS), max_cols = 3)
     # Create a figure with the calculated number of rows and columns of subplots
@@ -362,7 +362,7 @@ def draw_metrics_comparison(all_results, output_dir):
 
 def draw_pearson(all_results, output_dir):
     """Draws a bar plot comparing the Pearson correlation for each model and regression task"""
-    model_colors = {"MLP": "#FF9800", "CNN": "#2196F3", "GRU": "#4CAF50"}
+    model_colors = {"MLP": "#FFCC80", "CNN": "#90CAF9", "GRU": "#A5D6A7"}
     nrows, ncols = grid(len(REGRESSION_TASKS), max_cols = 5)
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 3.2, nrows * 4), squeeze = False)
     axes_flat = list(axes.flat)
@@ -392,7 +392,7 @@ def draw_pearson(all_results, output_dir):
     for ax in axes_flat[len(REGRESSION_TASKS):]:
         ax.axis("off")
 
-    fig.suptitle("Pearson Correlation — Numerical Health Results\n"
+    fig.suptitle("Pearson Correlation\n"
                  "(bootstrap 1000 it., IC 95%)  |  Black Border = Best Model",
                  fontsize = 12, 
                  fontweight = "bold")
