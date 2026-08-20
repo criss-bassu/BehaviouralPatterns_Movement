@@ -53,10 +53,10 @@ def regression_metrics(real_target, pred_target):
          if len(real_target) > 1 and np.std(real_target) > 0 and np.std(pred_target) > 0
          else np.nan)
     return {
-        # MAE: measures the mean absolute error between the real and predicted values: mean(|real - pred|)
+        # MAE: measures the Mean Absolute Error between the real and predicted values: mean(|real - pred|)
         # In the same units as the target variable
         "mae": mean_absolute_error(real_target, pred_target),
-        # RMSE: measures the root mean squared error between the real and predicted values: sqrt(mean((real - pred)^2))
+        # RMSE: measures the Root Mean Squared Error between the real and predicted values: sqrt(mean((real - pred)^2))
         # Penalizes larger errors more heavily and prevents positive and negative errors from cancelling each other out
         "rmse": root_mean_squared_error(real_target, pred_target),   
         # Pearson correlation coefficient
@@ -122,7 +122,7 @@ def compute_task_metric(df, task, metric_name, target_mean, target_std):
 
 
 def participant_bootstrap(test_preds, task, metric_name, target_mean, target_std, n_boot = 1000, seed = 9626):
-    """Bootstrap by participant, not week. Returns mean and 95% CI."""
+    """Bootstrap by participant. Returns mean and 95% CI."""
     # Use a random number generator with a fixed seed for reproducibility
     rng = np.random.default_rng(seed)
     # Group the DataFrame by participant_id to create a dictionary
@@ -141,7 +141,7 @@ def participant_bootstrap(test_preds, task, metric_name, target_mean, target_std
         # For each participant selected in sampled, get their rows and concatenate them into a single DataFrame
         # ignore_index = True -> Restarts the index of the new DataFrame from 0 (preseves the original structure by participant)
         boot_df = pd.concat([groups[idx] for idx in sampled], ignore_index = True)
-        # Catchs possible errors
+        # Catches possible errors
         try:
             # Compute the metric for the current bootstrap sample and append it to the values list
             values.append(compute_task_metric(boot_df, task, metric_name, target_mean, target_std))
@@ -154,5 +154,5 @@ def participant_bootstrap(test_preds, task, metric_name, target_mean, target_std
     return {
         "mean": np.mean(values), # mean of the metric values across all bootstrap samples
         "lower_2_5": np.percentile(values, 2.5), # lower bound of the 95% confidence interval (2.5th percentile)
-        "upper_97_5": np.percentile(values, 97.5), # upper bound of the 95% confidence interval (97.5th percentile)
+        "upper_97_5": np.percentile(values, 97.5) # upper bound of the 95% confidence interval (97.5th percentile)
     }

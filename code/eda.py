@@ -29,7 +29,7 @@ def get_descriptor_names():
 
 
 def compute_descriptors_statistics(tensor):
-    """Computes summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
+    """Gets summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
     descriptor_names = get_descriptor_names()
 
     # Flatten the tensor
@@ -47,17 +47,15 @@ def compute_descriptors_statistics(tensor):
             "Mean": np.mean(data_clean),
             "SD": np.std(data_clean),
             "Min": np.min(data_clean),
-            "Max": np.max(data_clean),
+            "Max": np.max(data_clean)
         })
 
     return pd.DataFrame(stats)
 
 
 def compute_covariates_targets_statistics(df):
-    """Computes summary statistics for clinical covariates and prediction targets.
-
-    Returns a DataFrame with columns: Variable, Type, n_valid, Missing, Mean, SD, Min, Max
-    """
+    """Get summary statistics for clinical covariates and prediction targets.
+    Returns a DataFrame with columns: Variable, Type, n_valid, Missing, Mean, SD, Min, Max"""
     # Define variable types
     covariates = COVARIABLES
     targets_binary = BINARY
@@ -215,7 +213,7 @@ def draw_demographics(df, output_dir):
     week_counts = weeks_per_participant.value_counts().sort_index()
 
     bars = ax.bar(
-        week_counts.index,  # Number of weeks
+        week_counts.index, # Number of weeks
         week_counts.values, # Number of participants
         color = "#2196F3",
         edgecolor = "black",
@@ -254,11 +252,7 @@ def draw_demographics(df, output_dir):
 
 def draw_diurnal_profile(tensor, output_dir):
     """Draws the average diurnal profile of accelerometry descriptors.
-
-    Shows the mean activity pattern across all weeks and days, for the following descriptors:
-    - ENMO_mean (activity level)
-    - sleep proportion
-    """
+    Shows the mean activity pattern across all weeks and days, for ENMO_mean (activity level) and sleep proportion."""
     descriptor_names = get_descriptor_names()
 
     # Compute mean across all weeks and participants (axis 0)

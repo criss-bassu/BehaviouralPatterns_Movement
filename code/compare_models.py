@@ -14,7 +14,7 @@ from config import (
     MODEL_SPECS,
     OUTPUT_DIR,
     SEED,
-    TARGET_COLS,
+    TARGET_COLS
 )
 from preprocessing_01 import load_data
 from models_02 import MLPEncoder, CNNEncoder, GRUEncoder, WeeklyOutcomeModel
@@ -130,7 +130,7 @@ def grid_search_model(model_name, spec, data, device, output_dir):
 
     rows = [] # Initialize a list to store the results of each hyperparameter combination
     # Iterate through each combination of hyperparameter values
-    for i, values in enumerate(combinations, 1): # Starts counting from 1 for better readability in the output
+    for i, values in enumerate(combinations, 1): # Starts counting from 1 for better readability
         candidate = dict(zip(keys, values)) # Dictionary mapping hyperparameter names to their corresponding values for the current combination
         # ** Unpacks dictionaries
         hp = {**spec["base_hp"], **candidate} # Merges the base hyperparameters with the current candidate hyperparameters, giving priority to the candidate values
@@ -212,15 +212,15 @@ def run_model(model_name, hp, data, device):
             try:
                 # For regression tasks, compute the Pearson correlation coefficient and its 95% confidence interval using bootstrapping
                 boot_r = participant_bootstrap(
-                    test_preds, # DataFrame with predictions, real values and masks for each task
-                    task, # The target variable to evaluate
-                    "pearson_r", # Metric to compute: Pearson correlation coefficient
-                    target_mean = data["target_mean"], # Mean of the target variable in the training set (for scaling back to original units)
-                    target_std = data["target_std"], # Standard deviation of the target variable in the training set (for scaling back to original units)
-                    n_boot = 1000, # Number of bootstrap iterations to compute the confidence interval
+                    test_preds,
+                    task,
+                    "pearson_r", # metric
+                    target_mean = data["target_mean"],
+                    target_std = data["target_std"],
+                    n_boot = 1000,
                     seed = 9626
                 )
-                # Store the Pearson correlation coefficient and its confidence interval for the current task
+
                 results[task]["pearson_r"] = boot_r["mean"]
                 results[task]["pearson_r_ic_2_5"] = boot_r["lower_2_5"]
                 results[task]["pearson_r_ic_97_5"] = boot_r["upper_97_5"]
@@ -264,7 +264,7 @@ def save_table(all_results, output_dir):
                 # If the task is a regression task, include Pearson
                 "pearson_r": round(res["pearson_r"], 4) if task in REGRESSION_TASKS else "",
                 "pearson_r IC 2.5%": round(res["pearson_r_ic_2_5"], 4) if task in REGRESSION_TASKS else "",
-                "pearson_r IC 97.5%":round(res["pearson_r_ic_97_5"],4) if task in REGRESSION_TASKS else ""
+                "pearson_r IC 97.5%":round(res["pearson_r_ic_97_5"], 4) if task in REGRESSION_TASKS else ""
             }
             rows.append(row)
     table = pd.DataFrame(rows)
@@ -298,7 +298,7 @@ def draw_loss_curves(histories, output_dir):
         ax.xaxis.set_major_locator(ticker.MaxNLocator(integer = True)) # Set the x-axis epochs to be integers only
     fig.suptitle("Curves of loss by architecture", fontsize = 13, fontweight = "bold") # Set the main title of the figure
     plt.tight_layout() # Adjust the layout of the subplots to prevent overlapping
-    # dpi= 150 -> resolution of the saved image (higher dpi = better quality)
+    # dpi = 150 -> resolution of the saved image (higher dpi = better quality)
     plt.savefig(f"{output_dir}/loss_curves_comparison.png", dpi = 150)
 
 
@@ -331,7 +331,7 @@ def draw_metrics_comparison(all_results, output_dir):
             capsize = 6, # size of the caps on the error bars
             error_kw = {"lw": 1.5} # line width of the error bars
         )
-        # Set the titlefor the current subplot
+        # Set the title for the current subplot
         ax.set_title(f"{task} ({metric.upper()})", fontweight = "bold")
         # Set the y-axis label for the current subplot
         ax.set_ylabel(metric.upper())
@@ -354,14 +354,13 @@ def draw_metrics_comparison(all_results, output_dir):
     fig.suptitle("Metric comparison in test (bootstrap 1000 it.)\n"
                  "The best model per task is highlighted in bold",
                  fontsize = 12, # Set the font size of the title to 12
-                 fontweight = "bold" # Set the font weight of the title to bold
-                 )
+                 fontweight = "bold") # Set the font weight of the title to bold
     plt.tight_layout() # Adjust the layout of the subplots to prevent overlapping
     plt.savefig(f"{output_dir}/metrics_comparison.png", dpi = 150)
 
 
 def draw_pearson(all_results, output_dir):
-    """Draws a bar plot comparing the Pearson correlation for each model and regression task"""
+    """Draws a bar plot comparing the Pearson correlation for each model and regression task."""
     model_colors = {"MLP": "#FFCC80", "CNN": "#90CAF9", "GRU": "#A5D6A7"}
     nrows, ncols = grid(len(REGRESSION_TASKS), max_cols = 5)
     fig, axes = plt.subplots(nrows, ncols, figsize = (ncols * 3.2, nrows * 4), squeeze = False)

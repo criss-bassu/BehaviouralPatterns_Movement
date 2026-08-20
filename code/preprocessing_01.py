@@ -26,7 +26,7 @@ class WeeklyAccelerometryDataset(Dataset):
         # Whether we want to apply data augmentation -> Only active in the training split
         self.augment = augment
 
-    # Amount of samples in the dataset (number of rows in the split selected)
+    # Number of rows in the split selected
     def __len__(self):
         return len(self.indices)
 
@@ -36,9 +36,8 @@ class WeeklyAccelerometryDataset(Dataset):
         d = self.descriptors[idx].clone()
 
         # if augment == TRUE
-        if self.augment:
-            # Random noise so that the model doesn't see the same date for each epoch
-            # The model won't overfit and will generalize better to unseen data
+        if self.augment: # To avoid overfitting and generalize better to unseen data
+            # Random noise so that the model doesn't see the same data for each epoch
             d = d + torch.randn_like(d) * 0.05
 
             # Simulates variability between descriptors and participants
@@ -46,16 +45,16 @@ class WeeklyAccelerometryDataset(Dataset):
             d = d * torch.empty(1).uniform_(0.9, 1.1)
 
             # Randomly selects which hours will be visible (10% of the hours will be zeroed out)
-            # Forces the model to be robust to the data gaps that exist in the real tensor
-            visible_hour = torch.rand(d.shape[0]) > 0.10
+            # Models missing hours
+            visible_hour = torch.rand(d.shape[0]) > 0.1
             d = d * visible_hour.unsqueeze(1)
 
         return {
             "descriptor": d, # the values of the descriptors
             "covariate": self.ClinicalCovariates[idx], # the values of the clinical covariates
             "target": self.OutcomeTargets[idx], # the values that we want to predict
-            "mask": self.mask[idx], # indicates which targets are valid (1) and which are missing (0)
-            "participant_id": self.participant_id[idx], # the identifier of the participant
+            "mask": self.mask[idx], # indicates which targets are valid (1) and which ones are missing (0)
+            "participant_id": self.participant_id[idx] # the identifier of the participant
         }
 
 
@@ -68,20 +67,20 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
     # Partition at participan level (Training = 70; Validation = 15; Testing = 15)
     participants = df["participant_id"].drop_duplicates()
     strat_col = BINARY[0] if BINARY else None # DMT2
-    # Group by Participant, taking who ever had DMT2 (1) or not (0) and reindexing to match the order of participants
-    # It maintains similar proportions of cases with and without DMT2 in train, validation, and test
+    # Group by Participant, taking whoever had DMT2 (1) or not (0) and reindexing to match the order of participants
+    # Similar proportions of cases with and without DMT2 in train, validation, and test
     participant_strat = (df.groupby("participant_id")[strat_col].max().reindex(participants)
                          if strat_col is not None else None)
 
     train_p, temp_p = train_test_split(
         participants, 
-        test_size = 0.30, # 70% in training; 30% in validation and testing
+        test_size = 0.3, # 70% in training; 30% in validation and testing
         random_state = random_state, # random seed for reproducibility
         stratify = participant_strat # divides the participants maintaining the proportion of DMT2 cases
     )
     val_p, test_p = train_test_split(
         temp_p,
-        test_size = 0.50, # 30% in validation (15%) and testing (15%)
+        test_size = 0.5, # 30% in validation (15%) and testing (15%)
         random_state = random_state,
         stratify = participant_strat.loc[temp_p] if participant_strat is not None else None
     )
@@ -104,21 +103,20 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
         # -1 = calculates the total number of rows
         # descriptors.shape[-1] = number of descriptors (columns)
     descriptors_train_flat = descriptors[train_idxs].reshape(-1, descriptors.shape[-1])
-    # Compute the mean of each descriptor
-    # axis = 0 -> computes the mean for each descriptor (ignoring NaN values)
+    # axis = 0 -> Gets the mean for each descriptor (ignoring NaN values)
     descriptors_mean = np.nanmean(descriptors_train_flat, axis = 0)
-    # Compute the standard deviation of each descriptor
+    # Get the standard deviation of each descriptor
     # If the standard deviation is 0, we replace it with 1 to avoid division by zero
     raw_descriptors_std = np.nanstd(descriptors_train_flat, axis = 0)
     descriptors_std  = np.where(
         (raw_descriptors_std == 0) | np.isnan(raw_descriptors_std),
-        1.0,
+        1,
         raw_descriptors_std
     )
     # Descriptors normalized (NaN -> 0)
     descriptors_scaled = np.nan_to_num(
         (descriptors - descriptors_mean) / descriptors_std, 
-        nan = 0.0
+        nan = 0
     )
 
     # NORMALISE clinical covariants (if used)
@@ -167,9 +165,9 @@ def load_data(descriptors_path = TENSOR_PATH, df_path = PARQUET_PATH, batch_size
         "test_data": test_loader, # DataLoader for testing
         "d": descriptors_scaled.shape[-1], # Number of descriptors
         "hours": descriptors_scaled.shape[1], # Number of hours
-        "cov_dim": cov.shape[-1], # Dimensionality of clinical covariates
+        "cov_dim": cov.shape[-1], # Size of clinical covariates
         "target_mean": targets_mean, # Mean of the targets in the training set
-        "target_std": targets_std, # Standard deviation of the targets in the training set
+        "target_std": targets_std # Standard deviation of the targets in the training set
     }
 
 
@@ -195,10 +193,10 @@ def normalize_covariables(df, train_idxs):
     
     # Get the clinical covariates of the training samples
     cov_train = df.loc[train_idxs, COVARIABLES]
-    # Compute the mean of each clinical covariate in the training set
-    cov_mean  = cov_train.mean()
-    # Compute the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
-    cov_std   = cov_train.std().replace(0, 1)
+    # Get the mean of each clinical covariate in the training set
+    cov_mean = cov_train.mean()
+    # Get the standard deviation of each clinical covariate in the training set (0 -> 1 to avoid division by zero)
+    cov_std = cov_train.std().replace(0, 1)
     # Normalise the clinical covariates of all samples (NaN -> 0)
     cov = np.nan_to_num(
         ((df[COVARIABLES] - cov_mean) / cov_std).to_numpy(dtype = "float32"),
@@ -223,7 +221,7 @@ def normalize_targets(targets_raw, mask, train_idxs):
             # Mean of the target's valid values
             targets_mean[i] = valid_target.mean()
             # Standard deviation of the target's valid values
-            targets_std[i]  = valid_target.std() if valid_target.std() > 0 else 1.0
+            targets_std[i] = valid_target.std() if valid_target.std() > 0 else 1.0
     # Create a copy of the target values to avoid modifying the original data
     targets = targets_raw.copy()
     # Standardize the numeric targets using the mean and standard deviation of the training set

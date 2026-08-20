@@ -8,34 +8,34 @@ from config import BINARY, NUMERICS, TARGET_COLS, TARGET_INDEX
 # Calculate the mean of loss values, ignoring masked elements
 def masked_mean(loss_values, mask):
     # Counts the amount of values where mask = 1 (0 doesn't add anyways)
-    # IF mask.sum() = 0, it makes it 1 -> avoid division by zero
-    denom = mask.sum().clamp_min(1.0)
+    # IF mask.sum() = 0 -> 1 (avoid division by zero)
+    denom = mask.sum().clamp_min(1)
     # Multiply each loss by its mask so that we eliminate cases where mask = 0
     # Sum the remaining values and divide by the amount of valid values
     return (loss_values * mask).sum() / denom # Returns the mean of the valid values
 
 
 def multitask_loss(predicted_outcomes, real_outcomes, mask, task_weights = None):
-    # If no weights have been provided, assign them a weight of 1.0
+    # If no weights have been provided -> weight = 1
     if task_weights is None:
-        task_weights = {task: 1.0 for task in TARGET_COLS} # All tasks are equally important 
+        task_weights = {task: 1 for task in TARGET_COLS} # All tasks are equally important 
 
-    losses = {} # Initialize a dictionary to store the loss for each task
+    losses = {} # Dictionary initialization to store the loss for each task
 
-    # Binary classification task: Use Binary cross-entropy loss
+    # Binary classification task: Binary cross-entropy loss
     for task in BINARY:
         idx = TARGET_INDEX[task]
-        # Compute the binary cross-entropy loss between the predicted logits and the true labels for the current task
+        # Get the binary cross-entropy loss between the predicted logits and the true labels for the current task
         # PD: logit = raw model output before applying the sigmoide function
         # Reduction = "none" -> The loss is computed for each sample without averaging
         bce = F.binary_cross_entropy_with_logits(predicted_outcomes[task], real_outcomes[:, idx], reduction = "none")
         # Calculate the mean of the valid losses (where mask = 1)
         losses[task] = masked_mean(bce, mask[:, idx]) # Store the mean loss for the current task in the dictionary
 
-    # Numerical tasks: Use Mean Squared Error
+    # Numerical tasks: Mean Squared Error
     for task in NUMERICS:
         idx = TARGET_INDEX[task]
-        # Compute the mean squared error between the predicted values and the true values for the current task
+        # Get the mean squared error between the predicted values and the true values for the current task
         # ** 2 = Penalizes larger errors more heavily and prevents positive and negative errors from cancelling each other out
         mse = (predicted_outcomes[task] - real_outcomes[:, idx]) ** 2
         losses[task] = masked_mean(mse, mask[:, idx])
@@ -48,7 +48,7 @@ def multitask_loss(predicted_outcomes, real_outcomes, mask, task_weights = None)
 # 1 epoch has B batches, each batch has N samples
 def train_one_epoch(model, train_data, optimiser, device):
     model.train() # Model in training mode
-    total_loss = 0.0 # Initialize the total loss for the epoch
+    total_loss = 0 # Initialize the total loss for the epoch
     for batch in train_data:
         d = batch["descriptor"].to(device) # Matrix of hours x descriptors (sample, hours, descriptors)
         cov = batch["covariate"].to(device) # Vector of clinical covariates (sample, covariates)
@@ -63,9 +63,9 @@ def train_one_epoch(model, train_data, optimiser, device):
         loss, losses = multitask_loss(outputs, targets, mask)
         # Calculates the gradients (how much the weight should change to reduce the loss) through backpropagation
         loss.backward()
-        # Prevents exploding gradients by scaling down the gradients if their norm > 1.0
-        # clip_grad_norm_ is modifies the gradients of the model's parameters in-place
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0) # Gradient Clipping
+        # Prevents exploding gradients by scaling down the gradients if their norm > 1
+        # clip_grad_norm_ modifies the gradients of the model's parameters in-place
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1) # Gradient Clipping
         # Updates the model's parameters based on the gradients:
         # Updates the weights (using Adam's optimizer)
         optimiser.step() # Learning step
@@ -77,12 +77,12 @@ def train_one_epoch(model, train_data, optimiser, device):
     return total_loss / len(train_data.dataset) # Mean loss of the total trainning set (for 1 epoch)
 
 
-# # Disables gradient calculation
+# Disables gradient calculation
 @torch.no_grad() # Gradients only needed during training
 def evaluate_loss(model, val_data, device):
     # Similar to train_one_epoch, but without backpropagation and weight updates
     model.eval()
-    total_loss = 0.0
+    total_loss = 0
     for batch in val_data:
         d = batch["descriptor"].to(device)
         cov = batch["covariate"].to(device)
@@ -110,7 +110,7 @@ def fit_model(model, train_data, val_data, device,
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimiser,
         start_factor = 0.1, # lr is just 10% of its original value during
-        end_factor = 1.0, # lr reaches its original value after the warmup phase
+        end_factor = 1, # lr reaches its original value after the warmup phase
         total_iters = warmup_epochs # the first "warmup_epochs" epochs
     )
     # Linear scheduler that reduces the learning rate if the metric stops improving

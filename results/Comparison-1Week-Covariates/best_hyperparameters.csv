@@ -1,0 +1,4 @@
+Model,lr,head_hidden,head_dropout,hidden_dim,rep_dim,dropout,weight_decay,channels,kernel_size,num_layers
+MLP,0.001,128,0.3,64.0,64,0.5,0.0001,,,
+CNN,0.001,128,0.3,,64,0.3,0.0015,128.0,12.0,
+GRU,0.001,128,0.3,128.0,64,0.3,1.5e-05,,,4.0

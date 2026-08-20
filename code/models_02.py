@@ -13,10 +13,10 @@ class MLPEncoder(nn.Module):
             nn.Linear(input_dim, hidden_dim), # First linear layer (input_dim -> hidden_dim)
             nn.ReLU(), # Activation function
             nn.Dropout(dropout), # 30% of activations are dropped (reduces overfitting)
-            nn.Linear(hidden_dim, hidden_dim), # Second linear layer
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, rep_dim), # Final linear layer. Produces the representation. (hidden_dim -> rep_dim)
+            nn.Linear(hidden_dim, rep_dim), # Produces the representation (hidden_dim -> rep_dim)
             nn.ReLU()
         )
 
@@ -28,7 +28,7 @@ class MLPEncoder(nn.Module):
 class CNNEncoder(nn.Module):
     def __init__(self, d, channels = 64, rep_dim = 128, dropout = 0.3, kernel_size = 5):
         super().__init__()
-        padding = kernel_size // 2
+        padding = kernel_size // 2 # The output has the same length as the input (same padding)
         # 1D-CNN definition
         self.conv = nn.Sequential(
             # in_channels = number of input features = d descriptors
@@ -38,7 +38,7 @@ class CNNEncoder(nn.Module):
             nn.ReLU(),
             nn.BatchNorm1d(channels), # Normalization layer to stabilize training
             nn.Dropout(dropout),
-            # Previous convolutional features as input.
+            # Previous convolutional features as input
             nn.Conv1d(in_channels = channels, out_channels = channels, kernel_size = kernel_size, padding = padding),
             nn.ReLU(),
             nn.BatchNorm1d(channels),
@@ -60,7 +60,7 @@ class CNNEncoder(nn.Module):
 
 
 class GRUEncoder(nn.Module):
-    def __init__(self, d, hidden_dim = 128, rep_dim = 128, num_layers = 1, dropout = 0.0):
+    def __init__(self, d, hidden_dim = 128, rep_dim = 128, num_layers = 1, dropout = 0):
         super().__init__()
         # GRU definition
         self.gru = nn.GRU(
@@ -68,7 +68,7 @@ class GRUEncoder(nn.Module):
             hidden_size = hidden_dim,
             num_layers = num_layers,
             batch_first = True, # The input tensor has a initial batch size: (batch_size, hours, d)
-            dropout = dropout if num_layers > 1 else 0.0 # If there is only one layer, dropout inside the GRU won't be meaningful
+            dropout = dropout if num_layers > 1 else 0 # If there is only one layer, dropout inside the GRU won't be meaningful
         )
         # Converts the GRU output into the final representation size
         self.proj = nn.Sequential(
@@ -90,17 +90,17 @@ class MultiTaskHead(nn.Module):
         input_dim = rep_dim + cov_dim # input dimension: (batch_size, rep_dim + cov_dim)
 
         # Shared block by all tasks:
-        # All tasks first use the same transformation before branching into separate output heads
+        # All tasks use the same transformation before branching into separate output heads
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim), # (batch_size, rep_dim + cov_dim) -> (batch_size, hidden_dim)
             nn.ReLU(),
             nn.Dropout(dropout)
         )
-        # A linear head for each task, dynamically built from the list of tasks (binary + numeric)
+        # A linear head for each task, built from the list of tasks (binary + numeric)
         # Order is preserved
         self.heads = nn.ModuleDict({task: nn.Linear(hidden_dim, 1) for task in tasks}) # Dictionary of neural network layers
 
-    # Takes the encoded weekly representation and the covariates, and produces one prediction per task
+    # Weekly representation + covariates -> one prediction per task
     def forward(self, h_week, cov):
         # Concatenates the weekly representation and covariates along the feature dimension
         # (batch_size, rep_dim) + (batch_size, cov_dim) -> (batch_size, rep_dim + cov_dim)
