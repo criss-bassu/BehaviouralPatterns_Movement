@@ -47,7 +47,7 @@ BASE_HP = {
 MODEL_SPECS = {
     "MLP": {
         # use_grid_search = False -> Uses base_hp and doesn't grid search
-        "use_grid_search": False, # Tries all combinations in the grid
+        "use_grid_search": True, # Tries all combinations in the grid
         # Fixed or final values chosen
         "base_hp": {
             **BASE_HP,
@@ -65,7 +65,7 @@ MODEL_SPECS = {
         }
     },
     "CNN": {
-        "use_grid_search": False,
+        "use_grid_search": True,
         "base_hp": {
             **BASE_HP,
             "channels": 128,
@@ -82,7 +82,7 @@ MODEL_SPECS = {
         }
     },
     "GRU": {
-        "use_grid_search": False,
+        "use_grid_search": True,
         "base_hp": {
             **BASE_HP,
             "hidden_dim": 64,
