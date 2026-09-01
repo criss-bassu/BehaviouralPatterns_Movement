@@ -70,6 +70,35 @@ def analyze_dmt2_distribution(df):
         print(f"    NaN (Missing): {dmt2_missing}")
 
 
+def analyze_accelerometry_missing_values(tensor):
+    """ Analyzes missing values in the accelerometry tensor.
+    - How many missing values in total out of how many total values
+    - How many weeks are affected by missing values """
+    print("\n" + "=" * 80)
+    print("ACCELEROMETRY TENSOR - MISSING VALUES ANALYSIS")
+    print("=" * 80)
+    
+    # Calculate total values
+    total_values = tensor.size
+    
+    # Count missing values (NaN)
+    missing_values = np.isnan(tensor).sum()
+    
+    # Find weeks with missing values
+    # Check if any value in each week is NaN
+    weeks_with_missing = []
+    for week_idx in range(tensor.shape[0]):
+        if np.isnan(tensor[week_idx]).any():
+            weeks_with_missing.append(week_idx)
+    
+    n_weeks_affected = len(weeks_with_missing)
+    total_weeks = tensor.shape[0]
+    
+    # Print results
+    print(f"Total missing values: {missing_values:,} out of {total_values:,}")
+    print(f"Weeks with missing data: {n_weeks_affected} out of {total_weeks}")
+
+
 def compute_descriptors_statistics(tensor):
     """Gets summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
     descriptor_names = get_descriptor_names()
@@ -442,6 +471,9 @@ def main():
     tensor, df = load_data()
     print(f"Tensor shape: {tensor.shape} (weeks, hours, descriptors)")
     print(f"DataFrame shape: {df.shape} (records, variables)")
+
+    # Analyze accelerometry missing values
+    analyze_accelerometry_missing_values(tensor)
 
     # Analyze data completeness
     analyze_data_completeness(df)
