@@ -28,6 +28,48 @@ def get_descriptor_names():
     ]
 
 
+def analyze_data_completeness(df):
+    """Analyzes which weeks have incomplete variable data (non-descriptor variables).
+    Returns a detailed report on missing data."""
+    
+    # Define all variable columns (excluding idweek, participant_id, Tiempo)
+    variable_columns = NUMERICS + BINARY # + COVARIABLES
+    
+    print("\n" + "=" * 80)
+    print("DATA COMPLETENESS ANALYSIS")
+    print("=" * 80)
+    
+    df['has_missing'] = df[variable_columns].isna().any(axis = 1)
+    
+    n_weeks_incomplete = df['has_missing'].sum()
+    n_weeks_complete = (~df['has_missing']).sum()
+    total_weeks = len(df)
+    
+    print(f"Total weeks in dataset: {total_weeks}")
+    print(f"Weeks with ALL variables: {n_weeks_complete}")
+    print(f"Weeks with MISSING any variable: {n_weeks_incomplete}")
+    
+    # Clean up temporary column
+    df.drop('has_missing', axis = 1, inplace = True)
+
+
+def analyze_dmt2_distribution(df):
+    """Analyzes DMT2 (Type-2 Diabetes) distribution"""
+    
+    print("\n" + "=" * 80)
+    print("DMT2 (TYPE-2 DIABETES) DISTRIBUTION ANALYSIS")
+    print("=" * 80)
+    
+    dmt2_counts = df['DMT2'].value_counts()
+    dmt2_missing = df['DMT2'].isna().sum()
+    
+    print(f"\n Value Counts:")
+    print(f"    0 (No diabetes): {dmt2_counts.get(0.0, 0)}")
+    print(f"    1 (Has diabetes): {dmt2_counts.get(1.0, 0)}")
+    if dmt2_missing > 0:
+        print(f"    NaN (Missing): {dmt2_missing}")
+
+
 def compute_descriptors_statistics(tensor):
     """Gets summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
     descriptor_names = get_descriptor_names()
@@ -280,7 +322,7 @@ def draw_diurnal_profile(tensor, output_dir):
     # Secondary axis: Sleep proportion
     ax2 = ax.twinx()
     color_sleep = "#9C27B0"
-    ax2.plot(hours_of_day, sleep_hourly, marker = "s", color = color_sleep, linewidth = 2, label = "sleep proportion")
+    ax2.plot(hours_of_day, sleep_hourly, marker = "s", color = color_sleep, linewidth = 2, label = "Sleep proportion")
     ax2.set_ylabel("Proportion of hour", fontsize = 11)
     ax2.set_ylim([0, 0.85])
 
@@ -401,8 +443,14 @@ def main():
     print(f"Tensor shape: {tensor.shape} (weeks, hours, descriptors)")
     print(f"DataFrame shape: {df.shape} (records, variables)")
 
+    # Analyze data completeness
+    analyze_data_completeness(df)
+
+    # Analyze DMT2 distribution
+    analyze_dmt2_distribution(df)
+
     # Compute statistics
-    print("\nComputing descriptor statistics...")
+    print("\n\nComputing descriptor statistics...")
     descriptor_stats = compute_descriptors_statistics(tensor)
 
     print("Computing covariates and targets statistics...")
