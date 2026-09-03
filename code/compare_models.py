@@ -52,14 +52,14 @@ def build_encoder(model_name, data, hp):
             d = data["d"],
             hours = data["hours"],
             hidden_dim = hp["hidden_dim"],
-            rep_dim = hp["rep_dim"], # Encoder output size
+            rep_dim = hp["rep_dim"], # Encoder output size = Head input size
             dropout = hp["dropout"]
         )
     if model_name == "CNN":
         return CNNEncoder(
             d = data["d"],
             channels = hp["channels"],
-            rep_dim = hp["rep_dim"], # Encoder output size
+            rep_dim = hp["rep_dim"],
             dropout = hp["dropout"],
             kernel_size = hp["kernel_size"]
         )
@@ -67,7 +67,7 @@ def build_encoder(model_name, data, hp):
         return GRUEncoder(
             d = data["d"],
             hidden_dim = hp["hidden_dim"],
-            rep_dim = hp["rep_dim"], # Encoder output size
+            rep_dim = hp["rep_dim"],
             num_layers = hp["num_layers"],
             dropout = hp["dropout"]
         )
@@ -96,7 +96,7 @@ def fit_with_hp(model_name, data, device, hp, training):
         train_data = data["train_data"], # training data
         val_data = data["val_data"], # validation data
         device = device,
-        lr = hp["lr"],  # learning rate
+        lr = hp["lr"], # learning rate
         weight_decay = hp["weight_decay"], # L2 regularization -> prevents overfitting by penalizing large weights
         max_epochs = training["max_epochs"], # maximum number of epochs to train the model
         patience = training["patience"], # Early stopping -> Prevents overfitting when the validation loss stops improving for a number of epochs
@@ -126,7 +126,7 @@ def grid_search_model(model_name, spec, data, device, output_dir):
     # * Unpacks the values of the grid dictionary into separate lists
     combinations = list(itertools.product(*grid.values())) # All combinations of hyperparameter values to test
 
-    print(f"\n{'=' * 55}\n  Grid search: {model_name} ({len(combinations)} combinations)\n{'=' * 55}")
+    print(f"\n--- Grid search: {model_name} ({len(combinations)} combinations) ---")
 
     rows = [] # Initialize a list to store the results of each hyperparameter combination
     # Iterate through each combination of hyperparameter values
@@ -150,13 +150,13 @@ def grid_search_model(model_name, spec, data, device, output_dir):
             "best_epoch": int(best_row["epoch"]), # Epoch number where the best validation loss was achieved
             "epochs_run": int(len(history_df)) # Number of epochs run for the current hyperparameter combination (early stopping)
         })
-        print(f"  [{i:2d}/{len(combinations)}] {candidate} -> val_loss = {val_loss:.4f}")
+        print(f"\t [{i:2d}/{len(combinations)}] {candidate} -> val_loss = {val_loss:.4f}")
 
     # Sort the combinations by validation loss in ascending order (best first) and reset the index
     table = pd.DataFrame(rows).sort_values("val_loss").reset_index(drop = True)
     # Save the results of the grid search without including the index column
     table.to_csv(f"{output_dir}/grid_search_{model_name}.csv", index = False)
-    print(f"\n=== Best configuration {model_name} ===")
+    print(f"\n--- Best configuration {model_name} ---")
     # Print the best 5 combinations found during the grid search
     print(table.head(5).to_string(index = False))
 
@@ -170,12 +170,12 @@ def grid_search_model(model_name, spec, data, device, output_dir):
 
 def run_model(model_name, hp, data, device):
     """Trains and evaluates a model with the specified encoder and hyperparameters."""
-    print(f"\n{'=' * 55}\n  Final Training: {model_name}\n{'=' * 55}")
-    print("  Hyperparameters:", {k: hp[k] for k in sorted(hp)})
+    print(f"\n{'-' * 55}\n  Final Training: {model_name}\n{'-' * 55}")
+    print("\t Hyperparameters:", {k: hp[k] for k in sorted(hp)})
 
     set_seed()
     model, history_df = fit_with_hp(model_name, data, device, hp, FINAL_TRAINING)
-    print(f"  Epochs: {len(history_df)}  |  Best validation loss: {history_df['val_loss'].min():.4f}")
+    print(f"\t Epochs: {len(history_df)}  |  Best validation loss: {history_df['val_loss'].min():.4f}")
 
     # EVALUATE the MODEL on the TEST set -> Get the predictions of the model over the test set
     test_preds = collect_predictions(model, data["test_data"], device = device)
@@ -242,7 +242,7 @@ def save_best_hyperparameters(best_hps, output_dir):
         rows.append(row)
     table = pd.DataFrame(rows)
     table.to_csv(f"{output_dir}/best_hyperparameters.csv", index = False)
-    print("\n=== BEST HYPERPARAMETERS ===")
+    print("\n--- BEST HYPERPARAMETERS ---")
     print(table.to_string(index = False))
 
 
@@ -270,7 +270,7 @@ def save_table(all_results, output_dir):
     table = pd.DataFrame(rows)
     # index = False -> Do not include a column showing the index
     table.to_csv(f"{output_dir}/models_comparison.csv", index = False)
-    print("\n=== COMPARATIVE TABLE ===")
+    print("\n--- COMPARATIVE TABLE ---")
     print(table.to_string(index = False))
 
 
@@ -316,9 +316,9 @@ def draw_metrics_comparison(all_results, output_dir):
         # Get the main metric for the current target variable (AUC-ROC for binary tasks, RMSE for numeric tasks)
         metric = METRIC_NAME[task] 
         # Get the mean of the metric for each model
-        means = [all_results[m][task]["mean"]  for m in all_results]
+        means = [all_results[m][task]["mean"] for m in all_results]
         # Get the lower bound of the 95% confidence interval for each model
-        lowers = [all_results[m][task]["mean"] - all_results[m][task]["ic_2_5"]  for m in all_results]
+        lowers = [all_results[m][task]["mean"] - all_results[m][task]["ic_2_5"] for m in all_results]
         # Get the upper bound of the 95% confidence interval for each model
         uppers = [all_results[m][task]["ic_97_5"] - all_results[m][task]["mean"] for m in all_results]
 
@@ -435,7 +435,6 @@ def main():
     draw_metrics_comparison(all_results, output_dir) # Draw a bar plot comparing the main metric for each model and task
     draw_pearson(all_results, output_dir) # Draw a bar plot comparing the Pearson correlation for each model and regression task
     print(f"\nResults in: '{output_dir}/'") # Print the directory where the results are saved
-    print("=== COMPARISON COMPLETED ===")
 
 
 if __name__ == "__main__":

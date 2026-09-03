@@ -67,7 +67,7 @@ class GRUEncoder(nn.Module):
             input_size = d, # descriptors
             hidden_size = hidden_dim,
             num_layers = num_layers,
-            batch_first = True, # The input tensor has a initial batch size: (batch_size, hours, d)
+            batch_first = True, # (batch_size, hours, d)
             dropout = dropout if num_layers > 1 else 0 # If there is only one layer, dropout inside the GRU won't be meaningful
         )
         # Converts the GRU output into the final representation size
@@ -82,6 +82,7 @@ class GRUEncoder(nn.Module):
         output, h_n = self.gru(x) # output = (batch_size, hours, hidden_dim); h_n = (num_layers, batch_size, hidden_dim)
         final_hidden = h_n[-1] # Takes the final hidden state from the last GRU layer
         return self.proj(final_hidden) # (batch_size, rep_dim)
+
 
 # Takes the encoded weekly representation plus the clinical covariates and produces one prediction per task
 class MultiTaskHead(nn.Module):
@@ -111,6 +112,7 @@ class MultiTaskHead(nn.Module):
         # Returns a dictionary with predictions for each task
         # Each prediction is squeezed to remove the singleton dimension: (batch_size, 1) -> (batch_size,)
         return {task: head(z).squeeze(1) for task, head in self.heads.items()} # Each task gets one prediction per sample
+
 
 class WeeklyOutcomeModel(nn.Module):
     def __init__(self, encoder, tasks, rep_dim = 128, cov_dim = 3, head_hidden = 128, head_dropout = 0.3):

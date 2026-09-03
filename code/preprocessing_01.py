@@ -1,5 +1,3 @@
-from sys import meta_path
-
 import numpy as np
 import pandas as pd
 import torch
@@ -41,13 +39,14 @@ class WeeklyAccelerometryDataset(Dataset):
             d = d + torch.randn_like(d) * 0.05
 
             # Simulates variability between descriptors and participants
-            # Multiplies the tensor by a random number between 0.9 and 1.1
+            # Multiplies the tensor by a random number between 0.9 and 1.1 in place (_)
+                # empty(1) = Creates an empty tensor for one element
             d = d * torch.empty(1).uniform_(0.9, 1.1)
 
             # Randomly selects which hours will be visible (10% of the hours will be zeroed out)
             # Models missing hours
             visible_hour = torch.rand(d.shape[0]) > 0.1
-            d = d * visible_hour.unsqueeze(1)
+            d = d * visible_hour.unsqueeze(1) # unsqueeze(1) = Adds a dimension to the tensor
 
         return {
             "descriptor": d, # the values of the descriptors

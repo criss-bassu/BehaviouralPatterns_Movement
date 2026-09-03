@@ -75,6 +75,8 @@ def train_one_epoch(model, train_data, optimiser, device):
         total_loss += loss.item() * d.size(0) # Accumulates the total loss for the epoch
 
     return total_loss / len(train_data.dataset) # Mean loss of the total trainning set (for 1 epoch)
+                        # len(train_data.dataset) = Number of samples in the training set
+                        # len(train_data) = Number of batches in the training set
 
 
 # Disables gradient calculation
@@ -118,7 +120,7 @@ def fit_model(model, train_data, val_data, device,
         optimiser,
         mode = "min", # the metric is expected to decrease (loss)
         factor = 0.5, # reduces the learning rate to half its value
-        patience = 5, # wait 5 epoch before decreasing the metrics's value
+        patience = 5, # wait 5 epoch before decreasing the lr's value
         min_lr = 1e-5 # lr won't fall below 1e-5
     )
 
@@ -142,7 +144,7 @@ def fit_model(model, train_data, val_data, device,
         # if in the warmup phase:
         if epoch <= warmup_epochs:
             warmup_scheduler.step() # update the learning rate according to the warmup scheduler
-        # if we're no longer in the warmup phase and val_loss is not NaN):
+        # if we're no longer in the warmup phase and val_loss is not NaN:
         elif not math.isnan(val_loss):
             plateau_scheduler.step(val_loss) # update the learning rate according to the plateau scheduler
 
