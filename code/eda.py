@@ -79,6 +79,19 @@ def analyze_accelerometry_missing_values(tensor):
     print(f"Weeks with missing data: {n_weeks_affected} out of {total_weeks}")
 
 
+def analyze_steps_outliers(df):
+    """Outlier analysis for the 'steps' descriptor."""
+    
+    steps_data = df[:, :, 9]  # Assuming the 'steps' descriptor is at index 9 in the tensor
+    
+    outlier_mask = (steps_data < 0) | (steps_data > 15000)
+    
+    n_outliers = np.sum(outlier_mask)
+    n_weeks = np.sum(np.any(outlier_mask, axis = 1))
+    
+    print(f"\nOutliers in 'steps': {n_outliers:,} hours | {n_weeks} weeks afected")
+
+
 def compute_descriptors_statistics(df):
     """Gets summary statistics for the hourly descriptors: Mean, SD, Min, Max."""
     descriptor_names = get_descriptor_names()
@@ -467,6 +480,9 @@ def main():
 
     # Analyze DMT2 distribution
     analyze_dmt2_distribution(df)
+
+    # Analyze outliers in 'steps' descriptor
+    # analyze_steps_outliers(tensor)
 
     # Compute statistics
     descriptor_stats = compute_descriptors_statistics(tensor)

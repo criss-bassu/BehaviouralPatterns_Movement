@@ -170,7 +170,7 @@ def grid_search_model(model_name, spec, data, device, output_dir):
 
 def run_model(model_name, hp, data, device):
     """Trains and evaluates a model with the specified encoder and hyperparameters."""
-    print(f"\n{'-' * 55}\n  Final Training: {model_name}\n{'-' * 55}")
+    print(f"\n---  Final Training: {model_name} ---")
     print("\t Hyperparameters:", {k: hp[k] for k in sorted(hp)})
 
     set_seed()

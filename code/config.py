@@ -17,8 +17,8 @@ COVARIABLES = []
 TENSOR_PATH = "../data/tensor_X-1.npy"
 PARQUET_PATH = "../data/dfParticipants-1.parquet"
 # Output directory for results
-OUTPUT_DIR = "../results" + "/Test"
-OUTPUT_DIR_EDA = "../results" + "/Test_eda"
+OUTPUT_DIR = "../results/Test"
+OUTPUT_DIR_EDA = "../results/Test_eda"
 
 SEED = 9626
 
